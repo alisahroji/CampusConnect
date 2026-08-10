@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  /* Menambahkan warna custom dari desain Figma */
+  --color-background: #F5F5F5;
+  --color-primary: #2563EB; /* Biru utama untuk tombol */
+}
+
+body {
+  background-color: var(--color-background);
+}
