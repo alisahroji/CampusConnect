@@ -1,4 +1,4 @@
-import { Mail, Lock, EyeOff, User } from 'lucide-react';
+import { Mail, Lock, EyeOff} from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Register() {
