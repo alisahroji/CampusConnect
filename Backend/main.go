@@ -3,12 +3,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"campusconnect/handler" // Sesuaikan dengan nama modul
+	"campusconnect/repository"
+	"campusconnect/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -26,6 +33,20 @@ type GoogleUserResult struct {
 	FamilyName    string `json:"family_name"`
 	Picture       string `json:"picture"`
 	Locale        string `json:"locale"`
+}
+
+// Struct untuk menerima request refresh token
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RequestOTPInput struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type VerifyOTPInput struct {
+	Email string `json:"email" binding:"required,email"`
+	Code  string `json:"code" binding:"required,len=6"`
 }
 
 func init() {
@@ -51,6 +72,10 @@ func main() {
 	r := gin.Default()
 
 	connectDB()
+
+	userRepo := repository.NewUserRepository(DB)
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
 
 	// Endpoint dasar
 	r.GET("/health", func(c *gin.Context) {
@@ -148,6 +173,195 @@ func main() {
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
 			"user":          user,
+		})
+	})
+
+	// --- RUTE UNTUK PERPANJANG TOKEN ---
+	r.POST("/api/auth/refresh", func(c *gin.Context) {
+		var req RefreshTokenRequest
+
+		// 1. Tangkap refresh token dari body request
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token tidak boleh kosong"})
+			return
+		}
+
+		// 2. Parse dan validasi Refresh Token menggunakan JWT_REFRESH_SECRET
+		token, err := jwt.Parse(req.RefreshToken, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("metode enkripsi tidak valid")
+			}
+			return []byte(os.Getenv("JWT_REFRESH_SECRET")), nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token tidak valid atau sudah kedaluwarsa, silakan login ulang"})
+			return
+		}
+
+		// 3. Ambil data dari dalam token
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Gagal membaca data token"})
+			return
+		}
+
+		// 4. Ambil ID User (sub)
+		userID := claims["sub"].(string)
+
+		// 5. Cetak pasangan token yang baru!
+		newAccessToken, newRefreshToken, err := GenerateTokens(userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat token baru"})
+			return
+		}
+
+		// 6. Kirim tiket baru tersebut
+		c.JSON(http.StatusOK, gin.H{
+			"message":       "Token berhasil diperbarui!",
+			"access_token":  newAccessToken,
+			"refresh_token": newRefreshToken,
+		})
+	})
+
+	// --- RUTE YANG DILINDUNGI SATPAM ---
+	// Perhatikan kita menyisipkan RequireAuth sebelum fungsi utamanya
+	// --- RUTE YANG DILINDUNGI SATPAM (Clean Architecture) ---
+	r.GET("/api/profile", RequireAuth, userHandler.GetProfile)
+	r.PUT("/api/profile", RequireAuth, userHandler.UpdateProfile)
+	r.POST("/api/profile/avatar", RequireAuth, userHandler.UploadAvatar)
+
+	// --- RUTE UNTUK LOGOUT ---
+	// Kita gunakan RequireAuth agar hanya orang yang sedang login yang bisa memanggil rute ini
+	r.POST("/api/auth/logout", RequireAuth, func(c *gin.Context) {
+		// Di tahap ini (Fase 1), backend hanya memberikan respons sukses.
+		// (Di Fase lanjutan, kita akan memasukkan token ini ke Redis Blacklist di sini).
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "Berhasil logout! Sesi diakhiri secara aman.",
+			"instruction": "Frontend wajib menghapus access_token dan refresh_token dari storage lokal.",
+		})
+	})
+
+	// --- RUTE REQUEST OTP ---
+	r.POST("/api/auth/request-otp", func(c *gin.Context) {
+		var input RequestOTPInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Format email tidak valid"})
+			return
+		}
+
+		// 1. Generate kode OTP acak 6 digit sederhana
+		otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+
+		// 2. Tentukan waktu kedaluwarsa (5 menit dari sekarang)
+		expiresAt := time.Now().Add(5 * time.Minute)
+
+		// 3. Simpan atau perbarui OTP di database untuk email tersebut
+		// Hapus OTP lama yang belum dipakai (jika ada) untuk email ini
+		DB.Unscoped().Where("email = ?", input.Email).Delete(&OTP{})
+		newOTP := OTP{
+			Email:     input.Email,
+			Code:      otpCode,
+			ExpiresAt: expiresAt,
+		}
+
+		if err := DB.Create(&newOTP).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan kode OTP", "details": err.Error()})
+			return
+		}
+		// 4. Kirim email OTP menggunakan fungsi Resend yang sudah kita buat
+		err := SendOTPEmail(input.Email, otpCode)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengirim email OTP", "details": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Kode OTP berhasil dikirim ke " + input.Email,
+		})
+	})
+
+	// --- RUTE VERIFIKASI OTP ---
+	r.POST("/api/auth/verify-otp", func(c *gin.Context) {
+		var input VerifyOTPInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email dan kode OTP (6 digit) wajib diisi"})
+			return
+		}
+
+		// 1. Cari data OTP di database berdasarkan email dan kode
+		var storedOTP OTP
+		result := DB.Where("email = ? AND code = ?", input.Email, input.Code).First(&storedOTP)
+		if result.Error != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Kode OTP salah atau tidak ditemukan"})
+			return
+		}
+
+		// 2. Cek apakah OTP sudah kedaluwarsa
+		if time.Now().After(storedOTP.ExpiresAt) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Kode OTP sudah kedaluwarsa, silakan minta ulang"})
+			return
+		}
+
+		// 3. Cek apakah user sudah terdaftar di database utama, jika belum buat baru
+		var user User
+		dbRes := DB.Where("email = ?", input.Email).First(&user)
+		if dbRes.Error != nil {
+			// Daftarkan sebagai user baru otomatis jika belum ada
+			user = User{
+				Email: input.Email,
+				Name:  "Mahasiswa Baru", // Default name, nanti bisa diubah di halaman profile
+				Role:  "Student",
+			}
+			DB.Create(&user)
+		}
+
+		// 4. Hapus OTP yang sudah sukses digunakan agar tidak bisa dipakai 2x
+		DB.Delete(&storedOTP)
+
+		// 5. Terbitkan Token JWT (Access Token & Refresh Token) resmi untuk user!
+		accessToken, refreshToken, err := GenerateTokens(user.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menerbitkan token autentikasi"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":       "Verifikasi OTP Sukses!",
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"user":          user,
+		})
+	})
+
+	// --- RUTE UJI COBA KIRIM EMAIL ---
+	r.GET("/api/test-email", func(c *gin.Context) {
+		// Ganti dengan email aktifmu untuk pengujian
+		targetEmail := "alinasution2401@gmail.com"
+		dummyOTP := "889922"
+
+		err := SendOTPEmail(targetEmail, dummyOTP)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Gagal mengirim email",
+				"details": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Email OTP berhasil dikirim ke " + targetEmail,
+		})
+	})
+
+	// --- RUTE DEBUG (HANYA UNTUK CEK DATABASE SEMENTARA) ---
+	r.GET("/api/debug/users", func(c *gin.Context) {
+		var users []User
+		DB.Find(&users)
+		c.JSON(http.StatusOK, gin.H{
+			"total_user": len(users),
+			"data_users": users,
 		})
 	})
 
