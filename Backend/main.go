@@ -14,6 +14,7 @@ import (
 	"campusconnect/repository"
 	"campusconnect/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
@@ -76,6 +77,14 @@ func main() {
 	userRepo := repository.NewUserRepository(DB)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"}, // Izin khusus untuk frontend Vite
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 
 	// Endpoint dasar
 	r.GET("/health", func(c *gin.Context) {
