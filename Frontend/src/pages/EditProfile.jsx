@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
@@ -21,6 +21,7 @@ const EditProfile = () => {
           Bio: data?.Bio || '' 
         });
       } catch (err) {
+        console.error(err);
         setError('Gagal memuat data profil. Sesi mungkin telah berakhir.');
       } finally {
         setLoading(false);
