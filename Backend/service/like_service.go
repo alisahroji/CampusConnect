@@ -8,6 +8,9 @@ import (
 type LikeService interface {
 	ToggleLike(projectID, userID string) (liked bool, likeCount int64, err error)
 	GetLikeCount(projectID string) (int64, error)
+	// GetLikeInfo mengembalikan jumlah like + status liked user tertentu.
+	// userID kosong berarti anonymous (liked = false).
+	GetLikeInfo(projectID, userID string) (likeCount int64, liked bool, err error)
 }
 
 type likeService struct {
@@ -60,4 +63,31 @@ func (s *likeService) GetLikeCount(projectID string) (int64, error) {
 		return 0, err // Sudah berupa repository.ErrNotFound
 	}
 	return s.likeRepo.CountByProject(projectID)
+}
+
+// GetLikeInfo mengembalikan jumlah like sebuah project beserta status apakah
+// user (userID) saat ini sudah me-like-nya. Dipakai frontend agar ikon like
+// tetap "liked" setelah refresh (BUG-1: state like tidak persist).
+func (s *likeService) GetLikeInfo(projectID, userID string) (int64, bool, error) {
+	// Pastikan project-nya ada (404 bila tidak)
+	if _, err := s.projectRepo.FindByID(projectID); err != nil {
+		return 0, false, err
+	}
+
+	count, err := s.likeRepo.CountByProject(projectID)
+	if err != nil {
+		return 0, false, err
+	}
+
+	liked := false
+	if userID != "" {
+		_, err = s.likeRepo.FindByUserAndProject(projectID, userID)
+		if err == nil {
+			liked = true
+		} else if !errors.Is(err, repository.ErrNotFound) {
+			return 0, false, err
+		}
+	}
+
+	return count, liked, nil
 }

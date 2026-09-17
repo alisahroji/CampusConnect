@@ -72,3 +72,51 @@ func RequireAuth(c *gin.Context) {
 	// 8. Silakan masuk! Lanjut ke endpoint yang dituju
 	c.Next()
 }
+
+// OptionalAuth mencoba membaca token JWT BILA header Authorization ada.
+// Berbeda dengan RequireAuth, request tetap dilanjutkan (tanpa abort) saat
+// token tidak ada / tidak valid — handler hanya melihat userID tidak di-set.
+// Dipakai endpoint publik yang tetap butuh identitas viewer, mis. GET /likes
+// agar bisa mengembalikan current_user.liked untuk user yang login.
+func OptionalAuth(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.Next() // anonymous guest
+		return
+	}
+
+	tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("metode enkripsi tidak valid")
+		}
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil || !token.Valid {
+		c.Next() // token rusak/expired → perlakukan sebagai guest
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		c.Next()
+		return
+	}
+
+	if exp, ok := claims["exp"].(float64); !ok || float64(time.Now().Unix()) > exp {
+		c.Next()
+		return
+	}
+
+	var user User
+	DB.First(&user, "id = ?", claims["sub"])
+	if user.ID == "" {
+		c.Next()
+		return
+	}
+
+	c.Set("currentUser", user)
+	c.Set("userID", user.ID)
+	c.Next()
+}

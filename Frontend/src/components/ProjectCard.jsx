@@ -1,7 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { getCurrentUserID } from '../utils/auth';
 
 const ProjectCard = ({ project }) => {
   const navigate = useNavigate();
+  // Owner (berdasarkan user_id vs JWT aktif) boleh langsung edit dari card
+  const isOwner = Boolean(project.user_id) && project.user_id === getCurrentUserID();
 
   // Tech stack disimpan sebagai string dipisah koma (mis. "React,Go,PostgreSQL")
   const techStack = (project.tech_stack || '')
@@ -31,8 +34,19 @@ const ProjectCard = ({ project }) => {
           <h3 className="font-display text-xl font-semibold text-[#1E293B] leading-snug">
             {project.title}
           </h3>
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] border border-[#E2E8F0] rounded-full px-2 py-0.5">
-            {project.status || 'published'}
+          <span className="shrink-0 flex items-center gap-1.5">
+            {isOwner && (
+              <Link
+                to={`/projects/${project.id}/edit`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] font-bold uppercase tracking-wider text-[#112320] bg-[#D97757]/10 border border-[#D97757]/30 rounded-full px-2 py-0.5 hover:bg-[#D97757]/20 transition-colors"
+              >
+                Edit
+              </Link>
+            )}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] border border-[#E2E8F0] rounded-full px-2 py-0.5">
+              {project.status || 'published'}
+            </span>
           </span>
         </div>
 

@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
 import ProjectList from './pages/ProjectList';
 import ProjectDetail from './pages/ProjectDetail';
+import ProjectForm from './pages/ProjectForm';
 import Feed from './pages/Feed';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/Dashboard';
@@ -20,7 +21,9 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/projects" element={<ProjectList />} />
+        <Route path="/projects/new" element={<ProjectForm />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
+        <Route path="/projects/:id/edit" element={<ProjectForm />} />
         <Route path="/feed" element={<Feed />} />
         
         {/* Rute Profile ditambahkan di sini, sejajar dengan rute utama */}

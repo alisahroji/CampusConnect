@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
+import { isLoggedIn, getCurrentUserID } from '../utils/auth';
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -15,8 +16,10 @@ const ProjectDetail = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [gallery, setGallery] = useState([]);
 
-  const isLoggedIn = () => Boolean(localStorage.getItem('access_token'));
+  // Owner = pemilik project (dibandingkan dengan user_id di JWT aktif)
+  const isOwner = Boolean(project?.user_id) && project.user_id === getCurrentUserID();
 
   const techStack = (project?.tech_stack || '')
     .split(',')
@@ -27,14 +30,22 @@ const ProjectDetail = () => {
     const fetchDetail = async () => {
       try {
         setLoading(true);
+        // Likes endpoint memakai auth opsional: bila token ada, response
+        // berisi current_user.liked sehingga status like tersinkron dari
+        // server setelah refresh (perbaikan BUG-1).
+        const token = localStorage.getItem('access_token');
         const [projectRes, commentsRes, likesRes] = await Promise.all([
           api.get(`/projects/${id}`),
           api.get(`/projects/${id}/comments`),
-          api.get(`/projects/${id}/likes`),
+          api.get(`/projects/${id}/likes`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }),
         ]);
         setProject(projectRes.data.data || null);
         setComments(commentsRes.data.data || []);
         setLikeCount(likesRes.data.like_count ?? 0);
+        setLiked(Boolean(likesRes.data.current_user?.liked));
+        setGallery(projectRes.data.data?.gallery || []);
       } catch (err) {
         setError(
           err.response?.status === 404
@@ -57,8 +68,9 @@ const ProjectDetail = () => {
       setLikeBusy(true);
       const res = await api.post(`/projects/${id}/like`);
       // Backend mengembalikan status like terbaru: { liked, like_count }
-      setLiked(res.data.liked);
-      setLikeCount(res.data.like_count);
+      // — sumber kebenaran tetap server, bukan tebakan lokal.
+      setLiked(Boolean(res.data.liked));
+      setLikeCount(res.data.like_count ?? 0);
     } catch (err) {
       if (err.response?.status === 401) {
         navigate('/login');
@@ -123,11 +135,11 @@ const ProjectDetail = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-body selection:bg-[#D97757] selection:text-white">
-      {/* Banner gambar project */}
+      {/* Banner gambar project / galeri utama */}
       <div className="h-64 md:h-80 bg-gradient-to-br from-[#112320] to-[#1E293B] flex items-center justify-center overflow-hidden">
-        {project?.image_url ? (
+        {project?.image_url || gallery.length > 0 ? (
           <img
-            src={project.image_url}
+            src={project?.image_url || gallery[0]?.image_url}
             alt={project?.title}
             className="w-full h-full object-cover"
           />
@@ -149,6 +161,18 @@ const ProjectDetail = () => {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-medium rounded">
             {error}
+          </div>
+        )}
+
+        {/* Aksi khusus pemilik project */}
+        {isOwner && (
+          <div className="mb-4 flex flex-wrap justify-end gap-3">
+            <Link
+              to={`/projects/${id}/edit`}
+              className="text-xs font-bold uppercase tracking-wider text-[#112320] bg-white border border-[#E2E8F0] hover:border-[#D97757] hover:text-[#D97757] px-4 py-2 rounded-full transition-colors"
+            >
+              ✎ Edit Project
+            </Link>
           </div>
         )}
 
@@ -245,6 +269,34 @@ const ProjectDetail = () => {
             )}
           </div>
         </article>
+
+        {/* Galeri gambar (migration 000007: satu project -> banyak gambar,
+            tampil sesuai display_order dari backend) */}
+        {gallery.length > 0 && (
+          <section className="mt-10">
+            <h2 className="font-display text-2xl font-semibold text-[#1E293B] mb-6">
+              Galeri ({gallery.length})
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {gallery.map((g) => (
+                <a
+                  key={g.id}
+                  href={g.image_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-2xl overflow-hidden border border-[#E2E8F0] bg-white shadow-sm hover:shadow-lg transition-shadow"
+                >
+                  <img
+                    src={g.image_url}
+                    alt="Gambar galeri project"
+                    className="w-full h-40 md:h-48 object-cover"
+                    loading="lazy"
+                  />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Section komentar */}
         <section className="mt-10">

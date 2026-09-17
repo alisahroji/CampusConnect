@@ -92,7 +92,8 @@ func main() {
 
 	// Inisiasi Layer Project
 	projectRepo := repository.NewProjectRepository(DB)
-	projectService := service.NewProjectService(projectRepo)
+	galleryRepo := repository.NewGalleryRepository(DB)
+	projectService := service.NewProjectService(projectRepo, galleryRepo)
 	projectHandler := handler.NewProjectHandler(projectService)
 
 	// Inisiasi Layer Interaksi (Like & Comment) - Minggu 4 Hari 3
@@ -102,7 +103,8 @@ func main() {
 
 	likeRepo := repository.NewLikeRepository(DB)
 	likeService := service.NewLikeService(likeRepo, projectRepo)
-	likeHandler := handler.NewLikeHandler(likeService)	// Inisiasi Layer Post (Feed) - Minggu 5 Hari 1 & 2
+	likeHandler := handler.NewLikeHandler(likeService)
+	imageHandler := handler.NewImageHandler()	// Inisiasi Layer Post (Feed) - Minggu 5 Hari 1 & 2
 	postRepo := repository.NewPostRepository(DB)
 	postService := service.NewPostService(postRepo)
 	postHandler := handler.NewPostHandler(postService)
@@ -346,8 +348,8 @@ func main() {
 
 	// --- RUTE PROJECT SHOWCASE ---
 	// Endpoint publik (bisa diakses tanpa login)
-	r.GET("/api/projects", projectHandler.GetAll)
-	r.GET("/api/projects/:id", projectHandler.GetByID)
+	r.GET("/api/projects", OptionalAuth, projectHandler.GetAll)
+	r.GET("/api/projects/:id", OptionalAuth, projectHandler.GetByID)
 
 	// Endpoint terproteksi (wajib login menggunakan middleware RequireAuth)
 	r.POST("/api/projects", RequireAuth, projectHandler.Create)
@@ -362,7 +364,13 @@ func main() {
 
 	// Like: toggle terproteksi, hitung publik
 	r.POST("/api/projects/:id/like", RequireAuth, likeHandler.Toggle)
-	r.GET("/api/projects/:id/likes", likeHandler.GetLikes)
+	r.GET("/api/projects/:id/likes", OptionalAuth, likeHandler.GetLikes)
+
+	// Daftar nilai status yang valid (draft/published) untuk UI form
+	r.GET("/api/projects/statuses", projectHandler.GetStatuses)
+
+	// Upload gambar galeri project ke Cloudinary (mengembalikan image_url)
+	r.POST("/api/images/project", RequireAuth, imageHandler.UploadProjectImage)
 
 	// --- RUTE FEED POSTS (Minggu 5) ---
 	// Endpoint publik (daftar feed bisa diakses tanpa login)
