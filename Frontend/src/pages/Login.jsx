@@ -176,7 +176,8 @@ const Login = () => {
 
             <button 
               type="button"
-              className="w-full flex items-center justify-center gap-3 bg-white border border-[#E2E8F0] hover:border-[#112320] text-[#1E293B] font-bold py-3 px-4 rounded-full transition-all duration-300"
+              onClick={() => { window.location.href = 'http://localhost:8080/api/auth/google/login'; }}
+              className="w-full flex items-center justify-center gap-3 bg-white border border-[#E2E8F0] hover:border-[#112320] text-[#1E293B] font-bold py-3 px-4 rounded-full transition-all duration-300 cursor-pointer"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

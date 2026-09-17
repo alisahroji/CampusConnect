@@ -66,7 +66,7 @@ const Profile = () => {
           {/* Avatar Cloudinary */}
           <div className="relative">
             <img 
-              src={profile?.PictureURL || 'https://ui-avatars.com/api/?name=' + profile?.Name} 
+              src={profile?.picture_url || 'https://ui-avatars.com/api/?name=' + profile?.name} 
               alt="Profile Avatar" 
               className="w-40 h-40 object-cover border-4 border-[#F8F9FA] shadow-lg bg-white"
               style={{ borderRadius: '4px' }} // Sharp tapi sedikit halus
@@ -75,8 +75,8 @@ const Profile = () => {
 
           {/* Info Identitas */}
           <div className="flex-1 pb-2">
-            <h1 className="font-display text-4xl font-bold text-[#1E293B] mb-2">{profile?.Name || 'Nama Belum Diatur'}</h1>
-            <p className="text-[#D97757] font-bold tracking-wide uppercase text-sm">{profile?.Email}</p>
+            <h1 className="font-display text-4xl font-bold text-[#1E293B] mb-2">{profile?.name || 'Nama Belum Diatur'}</h1>
+            <p className="text-[#D97757] font-bold tracking-wide uppercase text-sm">{profile?.email}</p>
           </div>
 
           {/* Tombol Edit */}
@@ -92,15 +92,15 @@ const Profile = () => {
           <div className="md:col-span-2">
             <h3 className="text-xs font-bold text-[#94A3B8] uppercase tracking-widest border-b border-[#E2E8F0] pb-4 mb-6">Tentang Saya</h3>
             <p className="text-[#1E293B] leading-relaxed text-lg font-light">
-              {profile?.Bio || 'Belum ada bio yang ditulis. Ceritakan sedikit tentang dirimu!'}
+              {profile?.bio || 'Belum ada bio yang ditulis. Ceritakan sedikit tentang dirimu!'}
             </p>
           </div>
           
           <div>
             <h3 className="text-xs font-bold text-[#94A3B8] uppercase tracking-widest border-b border-[#E2E8F0] pb-4 mb-6">Informasi Akademik</h3>
             <div className="space-y-4 text-sm text-[#1E293B]">
-              <p><span className="font-bold">Role:</span> {profile?.Role}</p>
-              <p><span className="font-bold">Bergabung:</span> {profile?.CreatedAt ? new Date(profile?.CreatedAt).toLocaleDateString('id-ID') : 'Data tanggal tidak tersedia'}</p>
+              <p><span className="font-bold">Role:</span> {profile?.role}</p>
+              <p><span className="font-bold">Bergabung:</span> {profile?.created_at ? new Date(profile?.created_at).toLocaleDateString('id-ID') : 'Data tanggal tidak tersedia'}</p>
             </div>
           </div>
         </div>

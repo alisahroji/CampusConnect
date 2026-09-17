@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log" // Ini log bawaan Go (dibiarkan agar kode lamamu tetap aman)
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -20,9 +21,19 @@ import (
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+
+	// Kita beri nama samaran "zlog" agar tidak bentrok dengan "log" bawaan Go
+	zlog "github.com/rs/zerolog/log"
 )
 
 var googleOauthConfig *oauth2.Config
+
+const (
+	// URL dasar frontend SPA (Vite) — dipakai untuk redirect pasca-OAuth
+	frontendURL = "http://localhost:5173"
+	// Tujuan redirect jika proses OAuth gagal
+	oauthErrorRedirect = frontendURL + "/login?error=oauth_failed"
+)
 
 // Struct untuk menampung balasan profil dari Google
 type GoogleUserResult struct {
@@ -74,9 +85,48 @@ func main() {
 
 	connectDB()
 
+	// Inisiasi Layer User
 	userRepo := repository.NewUserRepository(DB)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+
+	// Inisiasi Layer Project
+	projectRepo := repository.NewProjectRepository(DB)
+	projectService := service.NewProjectService(projectRepo)
+	projectHandler := handler.NewProjectHandler(projectService)
+
+	// Inisiasi Layer Interaksi (Like & Comment) - Minggu 4 Hari 3
+	commentRepo := repository.NewCommentRepository(DB)
+	commentService := service.NewCommentService(commentRepo, projectRepo)
+	commentHandler := handler.NewCommentHandler(commentService)
+
+	likeRepo := repository.NewLikeRepository(DB)
+	likeService := service.NewLikeService(likeRepo, projectRepo)
+	likeHandler := handler.NewLikeHandler(likeService)	// Inisiasi Layer Post (Feed) - Minggu 5 Hari 1 & 2
+	postRepo := repository.NewPostRepository(DB)
+	postService := service.NewPostService(postRepo)
+	postHandler := handler.NewPostHandler(postService)
+
+	// Inisiasi Layer Interaksi Post (Like & Comment) - Minggu 5 Hari 3
+	postLikeRepo := repository.NewPostLikeRepository(DB)
+	postCommentRepo := repository.NewPostCommentRepository(DB)
+	postLikeService := service.NewPostLikeService(postLikeRepo, postRepo)
+	postCommentService := service.NewPostCommentService(postCommentRepo, postRepo)
+	postInteractionHandler := handler.NewPostInteractionHandler(postLikeService, postCommentService)
+
+	// Inisiasi Layer Follow & Feed (Social Graph) - Minggu 5 Hari 3
+	followRepo := repository.NewFollowRepository(DB)
+	followService := service.NewFollowService(followRepo, userRepo)
+	followHandler := handler.NewFollowHandler(followService)
+	feedService := service.NewFeedService(followRepo, postRepo)
+	feedHandler := handler.NewFeedHandler(feedService)
+
+	// Inisiasi Layer Search - Minggu 5 Hari 4
+	searchRepo := repository.NewSearchRepository(DB)
+	searchService := service.NewSearchService(searchRepo)
+	searchHandler := handler.NewSearchHandler(searchService)
+
+
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"}, // Izin khusus untuk frontend Vite
@@ -86,81 +136,61 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// Endpoint dasar
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Backend OK!"})
-	})
+	// --- ENDPOINT HEALTH CHECK & READINESS ---
+	r.GET("/health", handler.HealthCheck)
+	r.GET("/ready", handler.ReadyCheck)
 
-	// Rute untuk menginisiasi Login Google
+	// --- RUTE AUTH & LOGIN ---
 	r.GET("/api/auth/google/login", func(c *gin.Context) {
-		// State ini fungsinya sebagai token anti-CSRF (untuk sekarang kita isi string statis dulu)
 		oauthStateString := "random-state-string"
-
-		// Membuat URL menuju halaman persetujuan Google
 		url := googleOauthConfig.AuthCodeURL(oauthStateString)
-
-		// Redirect user ke URL Google tersebut
 		c.Redirect(http.StatusTemporaryRedirect, url)
 	})
 
-	// Rute Callback setelah user memilih akun Google
 	r.GET("/api/auth/google/callback", func(c *gin.Context) {
-		// 1. Ambil authorization code dari URL
 		code := c.Query("code")
 		if code == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Code not found in URL"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 
-		// 2. Tukar kode tersebut dengan Access Token dari Google
 		token, err := googleOauthConfig.Exchange(context.Background(), code)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 
-		// 3. Gunakan Access Token untuk meminta data profil user
 		response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 		defer response.Body.Close()
 
-		// 4. Baca balasan dari Google
 		userData, err := io.ReadAll(response.Body)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response body"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 
-		// 5. Parse JSON ke dalam struct Go
 		var googleUser GoogleUserResult
 		if err := json.Unmarshal(userData, &googleUser); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 
-		// 6. Integrasi dengan Database (Mencari atau Membuat User Baru)
 		var user User
-
-		// Kita cari user berdasarkan email dari Google
 		result := DB.Where("email = ?", googleUser.Email).First(&user)
 
 		if result.Error != nil {
-			// Jika error (kemungkinan besar karena data tidak ditemukan), kita daftarkan sebagai user baru!
 			user = User{
 				Email:      googleUser.Email,
 				Name:       googleUser.Name,
 				PictureURL: googleUser.Picture,
-				// Kolom ID akan otomatis digenerate oleh PostgreSQL
-				// Kolom Role otomatis menjadi 'Student'
 			}
-
-			// Simpan ke database
 			if err := DB.Create(&user).Error; err != nil {
 				log.Printf("Gagal menyimpan user baru: %v\n", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan data user ke database"})
+				c.Redirect(http.StatusFound, oauthErrorRedirect)
 				return
 			}
 			log.Println("User baru berhasil didaftarkan otomatis!")
@@ -168,34 +198,28 @@ func main() {
 			log.Println("User lama berhasil login kembali!")
 		}
 
-		// 7. Terbitkan JWT (Access Token & Refresh Token)
 		accessToken, refreshToken, err := GenerateTokens(user.ID)
 		if err != nil {
 			log.Printf("Gagal membuat token: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menerbitkan token autentikasi"})
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
 			return
 		}
 
-		// 8. Kirim token dan data profil ke Frontend
-		c.JSON(http.StatusOK, gin.H{
-			"message":       "Autentikasi & Integrasi Database Sukses!",
-			"access_token":  accessToken,
-			"refresh_token": refreshToken,
-			"user":          user,
-		})
+		// Redirect kembali ke frontend SPA sambil membawa token via query params.
+		// Frontend (AuthCallback) yang akan menyimpan token ke localStorage.
+		redirectURL := frontendURL + "/auth/callback?" +
+			"access_token=" + url.QueryEscape(accessToken) +
+			"&refresh_token=" + url.QueryEscape(refreshToken)
+		c.Redirect(http.StatusFound, redirectURL)
 	})
 
-	// --- RUTE UNTUK PERPANJANG TOKEN ---
 	r.POST("/api/auth/refresh", func(c *gin.Context) {
 		var req RefreshTokenRequest
-
-		// 1. Tangkap refresh token dari body request
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token tidak boleh kosong"})
 			return
 		}
 
-		// 2. Parse dan validasi Refresh Token menggunakan JWT_REFRESH_SECRET
 		token, err := jwt.Parse(req.RefreshToken, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("metode enkripsi tidak valid")
@@ -208,24 +232,20 @@ func main() {
 			return
 		}
 
-		// 3. Ambil data dari dalam token
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Gagal membaca data token"})
 			return
 		}
 
-		// 4. Ambil ID User (sub)
 		userID := claims["sub"].(string)
 
-		// 5. Cetak pasangan token yang baru!
 		newAccessToken, newRefreshToken, err := GenerateTokens(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat token baru"})
 			return
 		}
 
-		// 6. Kirim tiket baru tersebut
 		c.JSON(http.StatusOK, gin.H{
 			"message":       "Token berhasil diperbarui!",
 			"access_token":  newAccessToken,
@@ -233,26 +253,13 @@ func main() {
 		})
 	})
 
-	// --- RUTE YANG DILINDUNGI SATPAM ---
-	// Perhatikan kita menyisipkan RequireAuth sebelum fungsi utamanya
-	// --- RUTE YANG DILINDUNGI SATPAM (Clean Architecture) ---
-	r.GET("/api/profile", RequireAuth, userHandler.GetProfile)
-	r.PUT("/api/profile", RequireAuth, userHandler.UpdateProfile)
-	r.POST("/api/profile/avatar", RequireAuth, userHandler.UploadAvatar)
-
-	// --- RUTE UNTUK LOGOUT ---
-	// Kita gunakan RequireAuth agar hanya orang yang sedang login yang bisa memanggil rute ini
 	r.POST("/api/auth/logout", RequireAuth, func(c *gin.Context) {
-		// Di tahap ini (Fase 1), backend hanya memberikan respons sukses.
-		// (Di Fase lanjutan, kita akan memasukkan token ini ke Redis Blacklist di sini).
-
 		c.JSON(http.StatusOK, gin.H{
 			"message":     "Berhasil logout! Sesi diakhiri secara aman.",
 			"instruction": "Frontend wajib menghapus access_token dan refresh_token dari storage lokal.",
 		})
 	})
 
-	// --- RUTE REQUEST OTP ---
 	r.POST("/api/auth/request-otp", func(c *gin.Context) {
 		var input RequestOTPInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -260,14 +267,9 @@ func main() {
 			return
 		}
 
-		// 1. Generate kode OTP acak 6 digit sederhana
 		otpCode := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-
-		// 2. Tentukan waktu kedaluwarsa (5 menit dari sekarang)
 		expiresAt := time.Now().Add(5 * time.Minute)
 
-		// 3. Simpan atau perbarui OTP di database untuk email tersebut
-		// Hapus OTP lama yang belum dipakai (jika ada) untuk email ini
 		DB.Unscoped().Where("email = ?", input.Email).Delete(&OTP{})
 		newOTP := OTP{
 			Email:     input.Email,
@@ -279,7 +281,7 @@ func main() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan kode OTP", "details": err.Error()})
 			return
 		}
-		// 4. Kirim email OTP menggunakan fungsi Resend yang sudah kita buat
+
 		err := SendOTPEmail(input.Email, otpCode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengirim email OTP", "details": err.Error()})
@@ -291,7 +293,6 @@ func main() {
 		})
 	})
 
-	// --- RUTE VERIFIKASI OTP ---
 	r.POST("/api/auth/verify-otp", func(c *gin.Context) {
 		var input VerifyOTPInput
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -299,7 +300,6 @@ func main() {
 			return
 		}
 
-		// 1. Cari data OTP di database berdasarkan email dan kode
 		var storedOTP OTP
 		result := DB.Where("email = ? AND code = ?", input.Email, input.Code).First(&storedOTP)
 		if result.Error != nil {
@@ -307,29 +307,24 @@ func main() {
 			return
 		}
 
-		// 2. Cek apakah OTP sudah kedaluwarsa
 		if time.Now().After(storedOTP.ExpiresAt) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Kode OTP sudah kedaluwarsa, silakan minta ulang"})
 			return
 		}
 
-		// 3. Cek apakah user sudah terdaftar di database utama, jika belum buat baru
 		var user User
 		dbRes := DB.Where("email = ?", input.Email).First(&user)
 		if dbRes.Error != nil {
-			// Daftarkan sebagai user baru otomatis jika belum ada
 			user = User{
 				Email: input.Email,
-				Name:  "Mahasiswa Baru", // Default name, nanti bisa diubah di halaman profile
+				Name:  "Mahasiswa Baru",
 				Role:  "Student",
 			}
 			DB.Create(&user)
 		}
 
-		// 4. Hapus OTP yang sudah sukses digunakan agar tidak bisa dipakai 2x
 		DB.Delete(&storedOTP)
 
-		// 5. Terbitkan Token JWT (Access Token & Refresh Token) resmi untuk user!
 		accessToken, refreshToken, err := GenerateTokens(user.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menerbitkan token autentikasi"})
@@ -344,27 +339,71 @@ func main() {
 		})
 	})
 
-	// --- RUTE UJI COBA KIRIM EMAIL ---
+	// --- RUTE PROFILE ---
+	r.GET("/api/profile", RequireAuth, userHandler.GetProfile)
+	r.PUT("/api/profile", RequireAuth, userHandler.UpdateProfile)
+	r.POST("/api/profile/avatar", RequireAuth, userHandler.UploadAvatar)
+
+	// --- RUTE PROJECT SHOWCASE ---
+	// Endpoint publik (bisa diakses tanpa login)
+	r.GET("/api/projects", projectHandler.GetAll)
+	r.GET("/api/projects/:id", projectHandler.GetByID)
+
+	// Endpoint terproteksi (wajib login menggunakan middleware RequireAuth)
+	r.POST("/api/projects", RequireAuth, projectHandler.Create)
+	r.PUT("/api/projects/:id", RequireAuth, projectHandler.Update)
+	r.DELETE("/api/projects/:id", RequireAuth, projectHandler.Delete)
+
+	// --- RUTE INTERAKSI: LIKE & COMMENT ---
+	// Komentar: daftar publik, tambah & hapus terproteksi
+	r.GET("/api/projects/:id/comments", commentHandler.GetByProject)
+	r.POST("/api/projects/:id/comments", RequireAuth, commentHandler.Create)
+	r.DELETE("/api/comments/:id", RequireAuth, commentHandler.Delete)
+
+	// Like: toggle terproteksi, hitung publik
+	r.POST("/api/projects/:id/like", RequireAuth, likeHandler.Toggle)
+	r.GET("/api/projects/:id/likes", likeHandler.GetLikes)
+
+	// --- RUTE FEED POSTS (Minggu 5) ---
+	// Endpoint publik (daftar feed bisa diakses tanpa login)
+	r.GET("/api/posts", postHandler.GetAll)
+	r.GET("/api/posts/:id", postHandler.GetByID)
+
+	// Endpoint terproteksi (wajib login menggunakan middleware RequireAuth)
+	r.POST("/api/posts", RequireAuth, postHandler.Create)
+	r.DELETE("/api/posts/:id", RequireAuth, postHandler.Delete)
+
+	// --- RUTE INTERAKSI POST: LIKE & COMMENT (Minggu 5) ---
+	// Komentar post: daftar publik, tambah & hapus terproteksi
+	r.GET("/api/posts/:id/comments", postInteractionHandler.GetComments)
+	r.POST("/api/posts/:id/comments", RequireAuth, postInteractionHandler.CreateComment)
+	r.DELETE("/api/post-comments/:id", RequireAuth, postInteractionHandler.DeleteComment)
+
+	// Like post: toggle terproteksi, hitungan publik
+	r.POST("/api/posts/:id/like", RequireAuth, postInteractionHandler.ToggleLike)
+	r.GET("/api/posts/:id/likes", postInteractionHandler.GetLikes)
+
+	// --- RUTE SOCIAL GRAPH: FOLLOW & FEED (Minggu 5) ---
+	r.POST("/api/users/:id/follow", RequireAuth, followHandler.Toggle)
+	r.GET("/api/feed", RequireAuth, feedHandler.GetFeed)
+
+	// --- RUTE SEARCH (Minggu 5 Hari 4) ---
+	r.GET("/api/search", searchHandler.Search)
+
+
+	// --- RUTE DEBUG & TEST ---
 	r.GET("/api/test-email", func(c *gin.Context) {
-		// Ganti dengan email aktifmu untuk pengujian
 		targetEmail := "alinasution2401@gmail.com"
 		dummyOTP := "889922"
 
 		err := SendOTPEmail(targetEmail, dummyOTP)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Gagal mengirim email",
-				"details": err.Error(),
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengirim email", "details": err.Error()})
 			return
 		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Email OTP berhasil dikirim ke " + targetEmail,
-		})
+		c.JSON(http.StatusOK, gin.H{"message": "Email OTP berhasil dikirim ke " + targetEmail})
 	})
 
-	// --- RUTE DEBUG (HANYA UNTUK CEK DATABASE SEMENTARA) ---
 	r.GET("/api/debug/users", func(c *gin.Context) {
 		var users []User
 		DB.Find(&users)
@@ -374,7 +413,9 @@ func main() {
 		})
 	})
 
-	log.Println("Server is running on port 8080...")
+	// --- LOGGING CANGGIH DARI ZEROLOG ---
+	zlog.Info().Msg("🚀 Server CampusConnect berjalan mantap di port 8080...")
+
 	if err := r.Run(":" + os.Getenv("PORT")); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

@@ -1,20 +1,25 @@
 package repository
 
 import (
+	"errors"
+	"time"
+
 	"gorm.io/gorm"
 )
 
 // Definisikan struct User agar repo bisa mengaksesnya
 type User struct {
-	ID          string `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Email       string `gorm:"unique;not null"`
-	Name        string `gorm:"not null"`
-	PictureURL  string
-	Role        string `gorm:"default:'Student'"`
-	Bio         string // Kolom baru
-	Skills      string // Kolom baru
-	GithubURL   string // Kolom baru
-	LinkedinURL string // Kolom baru
+	ID          string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Email       string    `gorm:"unique;not null" json:"email"`
+	Name        string    `gorm:"not null" json:"name"`
+	PictureURL  string    `json:"picture_url"`
+	Role        string    `gorm:"default:'Student'" json:"role"`
+	Bio         string    `json:"bio"`
+	Skills      string    `json:"skills"`
+	GithubURL   string    `json:"github_url"`
+	LinkedinURL string    `json:"linkedin_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type UserRepository interface {
@@ -44,6 +49,9 @@ func (r *userRepository) FindByEmail(email string) (*User, error) {
 func (r *userRepository) FindByID(id string) (*User, error) {
 	var user User
 	err := r.db.Where("id = ?", id).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}

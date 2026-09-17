@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 const EditProfile = () => {
-  const [formData, setFormData] = useState({ Name: '', Bio: '' });
+  const [formData, setFormData] = useState({ name: '', bio: '' });
   const [avatar, setAvatar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -17,8 +17,8 @@ const EditProfile = () => {
         const response = await api.get('/profile');
         const data = response.data?.data || response.data?.user || response.data;
         setFormData({ 
-          Name: data?.Name || '', 
-          Bio: data?.Bio || '' 
+          name: data?.name || '',
+          bio: data?.bio || ''
         });
       } catch (err) {
         console.error(err);
@@ -51,8 +51,8 @@ const handleSubmit = async (e) => {
       // 1. KIRIM DATA TEKS (sebagai JSON murni sesuai struct Golang)
       // Perhatikan huruf kecil "name" dan "bio" sesuai tag json di Golang
       await api.put('/profile', {
-        name: formData.Name,
-        bio: formData.Bio,
+        name: formData.name,
+        bio: formData.bio,
         skills: "", // Bisa dikosongkan jika belum ada di UI
         github_url: "",
         linkedin_url: ""
@@ -119,14 +119,15 @@ const handleSubmit = async (e) => {
             
             <div className="space-y-8">
               <div>
-                <label htmlFor="Name" className="block text-xs font-bold text-[#1E293B] uppercase tracking-wider mb-2">
+                <label htmlFor="name" className="block text-xs font-bold text-[#1E293B] uppercase tracking-wider mb-2">
                   Nama Lengkap
                 </label>
                 <input 
-                  type="text" 
-                  id="Name"
-                  name="Name"
-                  value={formData.Name}
+                  type="text" id="name"
+
+                  name="name"
+
+                  value={formData.name}
                   onChange={handleInputChange}
                   className="w-full bg-transparent border-b-2 border-[#E2E8F0] py-3 text-[#1E293B] focus:border-[#112320] focus:outline-none transition-colors rounded-none placeholder:text-[#94A3B8] text-lg"
                   placeholder="Masukkan nama lengkapmu..."
@@ -135,13 +136,16 @@ const handleSubmit = async (e) => {
               </div>
 
               <div>
-                <label htmlFor="Bio" className="block text-xs font-bold text-[#1E293B] uppercase tracking-wider mb-2">
+                <label htmlFor="bio" className="block text-xs font-bold text-[#1E293B] uppercase tracking-wider mb-2">
                   Biografi Singkat
                 </label>
-                <textarea 
-                  id="Bio"
-                  name="Bio"
-                  value={formData.Bio}
+                <textarea
+
+                  id="bio"
+
+                  name="bio"
+
+                  value={formData.bio}
                   onChange={handleInputChange}
                   rows="4"
                   className="w-full bg-transparent border-2 border-[#E2E8F0] p-4 text-[#1E293B] focus:border-[#112320] focus:outline-none transition-colors rounded-none placeholder:text-[#94A3B8] resize-none"
