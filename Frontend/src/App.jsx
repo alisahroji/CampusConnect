@@ -7,6 +7,8 @@ import ProjectList from './pages/ProjectList';
 import ProjectDetail from './pages/ProjectDetail';
 import ProjectForm from './pages/ProjectForm';
 import Feed from './pages/Feed';
+import UserProfile from './pages/UserProfile';
+import Search from './pages/Search';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
@@ -25,6 +27,9 @@ function App() {
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/projects/:id/edit" element={<ProjectForm />} />
         <Route path="/feed" element={<Feed />} />
+        {/* Minggu 5 Hari 6: Follow UI + Search UI */}
+        <Route path="/users/:id" element={<UserProfile />} />
+        <Route path="/search" element={<Search />} />
         
         {/* Rute Profile ditambahkan di sini, sejajar dengan rute utama */}
         <Route path="/profile" element={<Profile />} />

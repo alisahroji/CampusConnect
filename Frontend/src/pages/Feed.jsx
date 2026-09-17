@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import PostCard from '../components/PostCard';
 
@@ -94,6 +94,18 @@ const Feed = () => {
     }
   }, [nextCursor, loadingMore, initialLoading, tab, fetchPosts, navigate]);
 
+  // Muat ulang halaman pertama dari server (dipakai PostCard setelah
+  // post dihapus agar daftar selalu sinkron dengan backend).
+  const refresh = useCallback(async () => {
+    try {
+      const { items, nextCursor: nc } = await fetchPosts('', tab);
+      setPosts(items);
+      setNextCursor(nc);
+    } catch (err) {
+      if (err.response?.status === 401) navigate('/login');
+    }
+  }, [fetchPosts, tab, navigate]);
+
   // ---- Infinite scroll via IntersectionObserver ----
   const sentinelRef = useRef(null);
 
@@ -159,13 +171,22 @@ const Feed = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-body selection:bg-[#D97757] selection:text-white">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-        <header className="mb-8">
-          <h1 className="font-display text-3xl md:text-4xl font-semibold text-[#1E293B]">
-            Feed
-          </h1>
-          <p className="text-[#64748B] mt-1">
-            Cerita dan kabar terbaru dari komunitas kampus.
-          </p>
+        <header className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl md:text-4xl font-semibold text-[#1E293B]">
+              Feed
+            </h1>
+            <p className="text-[#64748B] mt-1">
+              Cerita dan kabar terbaru dari komunitas kampus.
+            </p>
+          </div>
+          {/* Entry point Search UI (Minggu 5 Hari 6) */}
+          <Link
+            to="/search"
+            className="shrink-0 flex items-center gap-2 bg-white border border-[#E2E8F0] hover:border-[#D97757] text-[#1E293B] text-sm font-bold py-2.5 px-4 rounded-full transition-colors shadow-sm"
+          >
+            🔍 Cari
+          </Link>
         </header>
 
         {/* Tab: Feed Saya vs Eksplorasi */}
@@ -257,7 +278,7 @@ const Feed = () => {
         ) : (
           <div className="space-y-4">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} onChanged={refresh} />
             ))}
           </div>
         )}

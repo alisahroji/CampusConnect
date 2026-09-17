@@ -8,6 +8,9 @@ import (
 type PostLikeService interface {
 	TogglePostLike(postID, userID string) (liked bool, likeCount int64, err error)
 	GetPostLikeCount(postID string) (int64, error)
+	// GetPostLikeInfo mengembalikan jumlah like + status liked user tertentu.
+	// userID kosong berarti anonymous (liked = false).
+	GetPostLikeInfo(postID, userID string) (likeCount int64, liked bool, err error)
 }
 
 type postLikeService struct {
@@ -23,7 +26,7 @@ func NewPostLikeService(postLikeRepo repository.PostLikeRepository, postRepo rep
 // di-unlike, jika belum maka di-like. Mirip dengan toggle like pada project.
 func (s *postLikeService) TogglePostLike(postID, userID string) (bool, int64, error) {
 	// 1. Pastikan post-nya benar-benar ada
-	if _, err := s.postRepo.FindByID(postID); err != nil {
+	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
 		return false, 0, err // Sudah berupa repository.ErrNotFound
 	}
 
@@ -57,8 +60,35 @@ func (s *postLikeService) TogglePostLike(postID, userID string) (bool, int64, er
 }
 
 func (s *postLikeService) GetPostLikeCount(postID string) (int64, error) {
-	if _, err := s.postRepo.FindByID(postID); err != nil {
+	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
 		return 0, err // Sudah berupa repository.ErrNotFound
 	}
 	return s.postLikeRepo.CountByPost(postID)
+}
+
+// GetPostLikeInfo mengembalikan jumlah like sebuah post beserta status apakah
+// user (userID) saat ini sudah me-like-nya. Dipakai frontend agar ikon like
+// post tetap "liked" setelah refresh (BUG-5A). userID kosong = anonymous.
+func (s *postLikeService) GetPostLikeInfo(postID, userID string) (int64, bool, error) {
+	// Pastikan post-nya ada (404 bila tidak)
+	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
+		return 0, false, err
+	}
+
+	count, err := s.postLikeRepo.CountByPost(postID)
+	if err != nil {
+		return 0, false, err
+	}
+
+	liked := false
+	if userID != "" {
+		_, err = s.postLikeRepo.FindByUserAndPost(postID, userID)
+		if err == nil {
+			liked = true
+		} else if !errors.Is(err, repository.ErrNotFound) {
+			return 0, false, err
+		}
+	}
+
+	return count, liked, nil
 }

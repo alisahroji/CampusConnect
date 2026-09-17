@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"campusconnect/repository"
 	"campusconnect/service"
 	"context"
+	"errors"
 	"net/http"
 	"os"
 
@@ -15,11 +17,20 @@ import (
 )
 
 type UserHandler struct {
-	userService service.UserService
+	userService   service.UserService
+	followService service.FollowService
 }
 
 func NewUserHandler(service service.UserService) *UserHandler {
 	return &UserHandler{userService: service}
+}
+
+// SetFollowService menyuntikkan dependensi FollowService untuk endpoint
+// profil publik (GetPublicProfile). Dipisah dari konstruktor agar wiring
+// di main.go tidak perlu diubah urutannya (followService dibuat setelah
+// userHandler).
+func (h *UserHandler) SetFollowService(followService service.FollowService) {
+	h.followService = followService
 }
 
 func (h *UserHandler) GetProfile(c *gin.Context) {
@@ -38,6 +49,44 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		"message": "Profil berhasil dimuat via Clean Architecture!",
 		"user":    userContext,
 	})
+}
+
+// GetPublicProfile menampilkan profil publik seorang user berdasarkan ID
+// (dipakai halaman UserProfile untuk Follow UI). Bila viewer membawa token
+// valid, response juga memuat current_user.following agar tombol Follow
+// tetap sinkron dengan server setelah refresh.
+// GET /api/users/:id
+func (h *UserHandler) GetPublicProfile(c *gin.Context) {
+	userID := c.Param("id")
+
+	viewerID := ""
+	if viewer, exists := c.Get("userID"); exists {
+		viewerID, _ = viewer.(string)
+	}
+
+	user, following, err := h.followService.GetUserWithFollowStatus(userID, viewerID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat profil user"})
+		return
+	}
+
+	// Email dianggap data privat: tidak pernah bocor lewat endpoint publik.
+	publicUser := *user
+	publicUser.Email = ""
+
+	resp := gin.H{
+		"message": "Berhasil",
+		"user":    publicUser,
+	}
+	if viewerID != "" && viewerID != userID {
+		resp["current_user"] = gin.H{"following": following}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // Struct untuk menampung data JSON yang dikirim dari Frontend/Thunder Client

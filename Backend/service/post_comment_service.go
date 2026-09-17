@@ -26,7 +26,7 @@ const maxPostCommentLength = 1000
 
 func (s *postCommentService) AddPostComment(postID, userID, content string) (*repository.PostComment, error) {
 	// 1. Pastikan post-nya ada
-	if _, err := s.postRepo.FindByID(postID); err != nil {
+	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
 		return nil, err // Sudah berupa repository.ErrNotFound
 	}
 
@@ -53,7 +53,7 @@ func (s *postCommentService) AddPostComment(postID, userID, content string) (*re
 
 func (s *postCommentService) GetPostComments(postID string) ([]repository.PostComment, error) {
 	// Pastikan post-nya ada agar 404 konsisten
-	if _, err := s.postRepo.FindByID(postID); err != nil {
+	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
 		return nil, err
 	}
 	return s.postCommentRepo.FindByPostID(postID)

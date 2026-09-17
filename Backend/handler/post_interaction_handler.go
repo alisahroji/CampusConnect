@@ -56,12 +56,16 @@ func (h *PostInteractionHandler) ToggleLike(c *gin.Context) {
 	})
 }
 
-// GetLikes menampilkan total like sebuah post (publik)
+// GetLikes menampilkan total like sebuah post (publik, auth opsional).
+// Bila request membawa token valid, response juga berisi current_user.liked
+// agar frontend bisa mensinkronkan status like post setelah refresh (BUG-5A).
 // GET /api/posts/:id/likes
 func (h *PostInteractionHandler) GetLikes(c *gin.Context) {
 	postID := c.Param("id")
 
-	likeCount, err := h.likeService.GetPostLikeCount(postID)
+	viewerID := getPostViewerID(c)
+
+	likeCount, liked, err := h.likeService.GetPostLikeInfo(postID, viewerID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post tidak ditemukan"})
@@ -71,10 +75,18 @@ func (h *PostInteractionHandler) GetLikes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"message":    "Berhasil",
 		"like_count": likeCount,
-	})
+	}
+
+	// Tambahkan current_user hanya bila request terautentikasi
+	// (tidak mengubah kontrak response untuk anonymous).
+	if viewerID != "" {
+		resp["current_user"] = gin.H{"liked": liked}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetComments menampilkan daftar komentar milik sebuah post (publik)

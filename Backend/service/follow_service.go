@@ -7,6 +7,9 @@ import (
 
 type FollowService interface {
 	ToggleFollow(followerID, followingID string) (following bool, err error)
+	// GetUserWithFollowStatus mengembalikan data user publik beserta status
+	// apakah viewer (viewerID, boleh kosong) mengikutinya.
+	GetUserWithFollowStatus(userID, viewerID string) (*repository.User, bool, error)
 }
 
 type followService struct {
@@ -16,6 +19,28 @@ type followService struct {
 
 func NewFollowService(followRepo repository.FollowRepository, userRepo repository.UserRepository) FollowService {
 	return &followService{followRepo: followRepo, userRepo: userRepo}
+}
+
+// GetUserWithFollowStatus mengembalikan data user publik + status apakah
+// viewer sudah meng-follow user tersebut. Dipakai halaman profil publik agar
+// tombol Follow selalu sinkron dengan server setelah refresh.
+func (s *followService) GetUserWithFollowStatus(userID, viewerID string) (*repository.User, bool, error) {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, false, err // repository.ErrNotFound bila tidak ada
+	}
+
+	following := false
+	if viewerID != "" && viewerID != userID {
+		_, err = s.followRepo.FindByFollowerAndFollowing(viewerID, userID)
+		if err == nil {
+			following = true
+		} else if !errors.Is(err, repository.ErrNotFound) {
+			return nil, false, err
+		}
+	}
+
+	return user, following, nil
 }
 
 // ToggleFollow membalik status follow: jika belum follow maka follow,

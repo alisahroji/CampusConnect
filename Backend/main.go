@@ -119,8 +119,12 @@ func main() {
 	// Inisiasi Layer Follow & Feed (Social Graph) - Minggu 5 Hari 3
 	followRepo := repository.NewFollowRepository(DB)
 	followService := service.NewFollowService(followRepo, userRepo)
-	followHandler := handler.NewFollowHandler(followService)
-	feedService := service.NewFeedService(followRepo, postRepo)
+	followHandler := handler.NewFollowHandler(followService)
+
+	// Inject FollowService ke userHandler untuk profil publik (Follow UI)
+	userHandler.SetFollowService(followService)
+
+	feedService := service.NewFeedService(followRepo, postRepo)
 	feedHandler := handler.NewFeedHandler(feedService)
 
 	// Inisiasi Layer Search - Minggu 5 Hari 4
@@ -374,11 +378,12 @@ func main() {
 
 	// --- RUTE FEED POSTS (Minggu 5) ---
 	// Endpoint publik (daftar feed bisa diakses tanpa login)
-	r.GET("/api/posts", postHandler.GetAll)
-	r.GET("/api/posts/:id", postHandler.GetByID)
+	r.GET("/api/posts", OptionalAuth, postHandler.GetAll)
+	r.GET("/api/posts/:id", OptionalAuth, postHandler.GetByID)
 
 	// Endpoint terproteksi (wajib login menggunakan middleware RequireAuth)
 	r.POST("/api/posts", RequireAuth, postHandler.Create)
+	r.PUT("/api/posts/:id", RequireAuth, postHandler.Update)
 	r.DELETE("/api/posts/:id", RequireAuth, postHandler.Delete)
 
 	// --- RUTE INTERAKSI POST: LIKE & COMMENT (Minggu 5) ---
@@ -389,11 +394,15 @@ func main() {
 
 	// Like post: toggle terproteksi, hitungan publik
 	r.POST("/api/posts/:id/like", RequireAuth, postInteractionHandler.ToggleLike)
-	r.GET("/api/posts/:id/likes", postInteractionHandler.GetLikes)
+	r.GET("/api/posts/:id/likes", OptionalAuth, postInteractionHandler.GetLikes)
 
 	// --- RUTE SOCIAL GRAPH: FOLLOW & FEED (Minggu 5) ---
-	r.POST("/api/users/:id/follow", RequireAuth, followHandler.Toggle)
-	r.GET("/api/feed", RequireAuth, feedHandler.GetFeed)
+	r.POST("/api/users/:id/follow", RequireAuth, followHandler.Toggle)
+
+	r.GET("/api/feed", RequireAuth, feedHandler.GetFeed)
+
+	// Profil publik user untuk halaman Follow UI (publik, auth opsional)
+	r.GET("/api/users/:id", OptionalAuth, userHandler.GetPublicProfile)
 
 	// --- RUTE SEARCH (Minggu 5 Hari 4) ---
 	r.GET("/api/search", searchHandler.Search)

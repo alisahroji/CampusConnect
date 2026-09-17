@@ -44,5 +44,6 @@ func (s *feedService) GetFeed(userID, cursor string, limit int) ([]repository.Po
 	userIDs := append(followingIDs, userID)
 
 	// 3. Ambil post dari kumpulan user tersebut dengan cursor
-	return s.postRepo.FindByUserIDs(userIDs, cursor, limit)
+	// viewer = user yang meminta feed, agar liked_by_me terisi benar.
+	return s.postRepo.FindByUserIDs(userIDs, cursor, limit, userID)
 }

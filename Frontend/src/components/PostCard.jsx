@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { getCurrentUserID } from '../utils/auth';
 
 // Format waktu relatif sederhana (mis. "5 jam lalu")
 const formatRelativeTime = (isoDate) => {
@@ -20,12 +21,31 @@ const formatRelativeTime = (isoDate) => {
   });
 };
 
-const PostCard = ({ post }) => {
+// Post dianggap "diedit" bila updated_at menyimpang jauh dari created_at
+const wasEdited = (createdAt, updatedAt) => {
+  if (!createdAt || !updatedAt) return false;
+  return new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 1000;
+};
+
+const PostCard = ({ post, onChanged }) => {
   const navigate = useNavigate();
 
-  const [liked, setLiked] = useState(false);
+  // Bootstrap status like LANGSUNG dari server: setiap response post (list
+  // maupun detail) kini memuat like_count & liked_by_me hasil hitung DB, jadi
+  // ikon like tetap benar setelah refresh — bukan lagi state lokal yang
+  // selalu false (BUG-5A: klik pertama justru melakukan unlike).
+  const [liked, setLiked] = useState(Boolean(post.liked_by_me));
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [likeBusy, setLikeBusy] = useState(false);
+
+  // Konten disimpan di state agar hasil edit inline langsung tampil;
+  // lastUpdated ikut diperbarui agar badge "diedit" muncul tanpa reload.
+  const [content, setContent] = useState(post.content);
+  const [lastUpdated, setLastUpdated] = useState(post.updated_at);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
@@ -36,6 +56,10 @@ const PostCard = ({ post }) => {
   const [cardError, setCardError] = useState('');
 
   const isLoggedIn = () => Boolean(localStorage.getItem('access_token'));
+
+  // Ownership check dari JWT (bukan dari data server yang bisa dipalsukan UI)
+  const currentUID = getCurrentUserID();
+  const isOwner = Boolean(currentUID) && currentUID === post.user_id;
 
   const handleLike = async () => {
     if (!isLoggedIn()) {
@@ -59,6 +83,52 @@ const PostCard = ({ post }) => {
     }
   };
 
+  const startEdit = () => {
+    setEditText(content);
+    setCardError('');
+    setEditing(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const next = editText.trim();
+    if (!next) return;
+    try {
+      setSavingEdit(true);
+      setCardError('');
+      const res = await api.put(`/posts/${post.id}`, { content: next });
+      setContent(res.data.data.content);
+      setLastUpdated(res.data.data.updated_at);
+      setEditing(false);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        navigate('/login');
+        return;
+      }
+      setCardError(err.response?.data?.error || 'Gagal menyimpan perubahan');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Hapus post ini secara permanen?')) return;
+    try {
+      setDeleteBusy(true);
+      setCardError('');
+      await api.delete(`/posts/${post.id}`);
+      // Minta parent (Feed) memuat ulang daftar dari server
+      onChanged?.();
+    } catch (err) {
+      if (err.response?.status === 401) {
+        navigate('/login');
+        return;
+      }
+      setCardError(err.response?.data?.error || 'Gagal menghapus post');
+      setDeleteBusy(false);
+    }
+  };
+
   const toggleComments = async () => {
     const next = !showComments;
     setShowComments(next);
@@ -78,8 +148,8 @@ const PostCard = ({ post }) => {
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    const content = newComment.trim();
-    if (!content) return;
+    const commentContent = newComment.trim();
+    if (!commentContent) return;
 
     if (!isLoggedIn()) {
       navigate('/login');
@@ -89,7 +159,9 @@ const PostCard = ({ post }) => {
     try {
       setCommentBusy(true);
       setCardError('');
-      const res = await api.post(`/posts/${post.id}/comments`, { content });
+      const res = await api.post(`/posts/${post.id}/comments`, {
+        content: commentContent,
+      });
       setComments((prev) => [...prev, res.data.data]);
       setNewComment('');
     } catch (err) {
@@ -115,20 +187,88 @@ const PostCard = ({ post }) => {
           alt={post.user?.name}
           className="w-10 h-10 rounded-full object-cover border border-[#E2E8F0]"
         />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-[#1E293B]">
-            {post.user?.name || 'Anonim'}
+            {/* Nama penulis menuju profil publik (Follow UI) */}
+            {post.user_id ? (
+              <Link
+                to={`/users/${post.user_id}`}
+                className="hover:text-[#D97757] transition-colors"
+              >
+                {post.user?.name || 'Anonim'}
+              </Link>
+            ) : (
+              (post.user?.name || 'Anonim')
+            )}
           </p>
           <p className="text-xs text-[#94A3B8]">
             {formatRelativeTime(post.created_at)}
+            {wasEdited(post.created_at, lastUpdated) && (
+              <span className="italic"> · diedit</span>
+            )}
           </p>
         </div>
+
+        {/* Menu owner: Edit & Hapus */}
+        {isOwner && !editing && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={startEdit}
+              className="text-xs font-bold text-[#64748B] hover:text-[#D97757] px-2 py-1 rounded-full hover:bg-[#F8F9FA] transition-colors cursor-pointer"
+            >
+              ✎ Edit
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteBusy}
+              className="text-xs font-bold text-[#64748B] hover:text-red-600 px-2 py-1 rounded-full hover:bg-red-50 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              {deleteBusy ? '…' : '🗑 Hapus'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Isi post */}
-      <p className="text-[#1E293B] leading-relaxed whitespace-pre-line mb-4">
-        {post.content}
-      </p>
+      {/* Isi post — mode baca atau mode edit inline */}
+      {editing ? (
+        <form onSubmit={handleEditSubmit} className="mb-4">
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={4}
+            maxLength={2000}
+            autoFocus
+            className="w-full bg-[#F8F9FA] border border-[#E2E8F0] rounded-xl px-4 py-3 text-[#1E293B] text-sm leading-relaxed focus:border-[#D97757] focus:outline-none resize-none"
+          />
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-xs text-[#94A3B8]">
+              {editText.length}/2000
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="text-sm font-bold text-[#64748B] hover:text-[#1E293B] px-4 py-2 rounded-full transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit || !editText.trim()}
+                className="bg-[#D97757] hover:bg-[#C26244] disabled:bg-[#E2E8F0] disabled:text-[#94A3B8] text-white text-sm font-bold py-2 px-5 rounded-full transition-colors cursor-pointer"
+              >
+                {savingEdit ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <p className="text-[#1E293B] leading-relaxed whitespace-pre-line mb-4">
+          {content}
+        </p>
+      )}
 
       {/* Gambar post (opsional) */}
       {post.image_url && (
