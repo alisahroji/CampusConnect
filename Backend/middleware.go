@@ -64,6 +64,16 @@ func RequireAuth(c *gin.Context) {
 		return
 	}
 
+	// 6b. Minggu 6 Hari 4: tolak user yang diblokir admin (403, bukan 401 —
+	// identitasnya valid, hanya akunnya dibekukan). User dimuat dari DB
+	// per-request sehingga ban berlaku SEKETIKA meskipun access token lama
+	// belum kedaluwarsa.
+	if user.Banned {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Akun ini sedang diblokir oleh admin"})
+		c.Abort()
+		return
+	}
+
 	// 7. Simpan data profil user ke dalam memori context Gin
 	// Ini agar endpoint selanjutnya tahu siapa yang sedang melakukan request
 	c.Set("currentUser", user)
@@ -116,7 +126,62 @@ func OptionalAuth(c *gin.Context) {
 		return
 	}
 
+	// Minggu 6 Hari 4: user diblokir diperlakukan sebagai guest (tanpa
+	// identitas), konsisten dengan RequireAuth yang menolaknya secara eksplisit.
+	if user.Banned {
+		c.Next()
+		return
+	}
+
 	c.Set("currentUser", user)
 	c.Set("userID", user.ID)
 	c.Next()
+}
+
+// loadUserByID mengambil satu user dari DB berdasarkan ID.
+// Helper package-level agar auth inline di main.go (login OTP, refresh,
+// Google callback) bisa memakai cek ban yang sama dengan middleware.
+func loadUserByID(id string) *User {
+	var user User
+	if err := DB.First(&user, "id = ?", id).Error; err != nil {
+		return nil
+	}
+	return &user
+}
+
+// AdminGuard adalah lapisan otorisasi di ATAS RequireAuth (rute admin):
+// RequireAuth sudah memverifikasi token & memuat user dari DB (sumber
+// kebenaran) ke context. Role TIDAK dibaca dari token/client — melainkan
+// dari DB via RequireAuth, sehingga role yang diubah admin langsung berlaku.
+//  - anonymous / token rusak  -> 401 (oleh RequireAuth, AdminGuard tak tercapai)
+//  - authenticated non-Admin  -> 403
+//  - authenticated Admin      -> lanjut ke handler
+func AdminGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser, exists := c.Get("currentUser")
+		if !exists {
+			// Pertahanan: tidak boleh terjadi setelah RequireAuth.
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Akses ditolak: Belum terautentikasi"})
+			c.Abort()
+			return
+		}
+
+		user, ok := currentUser.(User)
+		if !ok || user.Role != "Admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Endpoint ini khusus admin"})
+			c.Abort()
+			return
+		}
+
+		// Defense in depth (Minggu 6 Hari 4): walaupun RequireAuth sudah
+		// menolak user banned sebelum guard ini, guard tetap mengecek agar
+		// salah wiring rute di masa depan tidak membuka celah.
+		if user.Banned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Akun ini sedang diblokir oleh admin"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
 }

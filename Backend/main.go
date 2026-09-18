@@ -156,6 +156,11 @@ func main() {
 
 	notificationHandler := handler.NewNotificationHandler(notificationService)
 
+	// Inisiasi Layer Admin (Minggu 6 Hari 4) — User Management backend.
+	// Authorization: RequireAuth + AdminGuard; role dibaca dari DB, bukan token.
+	adminService := service.NewAdminService(userRepo)
+	adminHandler := handler.NewAdminHandler(adminService)
+
 
 
 	r.Use(cors.New(cors.Config{
@@ -228,6 +233,13 @@ func main() {
 			log.Println("User lama berhasil login kembali!")
 		}
 
+		// Minggu 6 Hari 4: user yang diblokir admin tidak bisa login via Google
+		// (diarahkan ke alur error OAuth yang sama seperti kegagalan lain).
+		if user.Banned {
+			c.Redirect(http.StatusFound, oauthErrorRedirect)
+			return
+		}
+
 		accessToken, refreshToken, err := GenerateTokens(user.ID)
 		if err != nil {
 			log.Printf("Gagal membuat token: %v\n", err)
@@ -269,6 +281,14 @@ func main() {
 		}
 
 		userID := claims["sub"].(string)
+
+		// Minggu 6 Hari 4: user yang diblokir admin tidak bisa menukar
+		// refresh token menjadi access token baru.
+		refreshUser := loadUserByID(userID)
+		if refreshUser == nil || refreshUser.Banned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Akun ini sedang diblokir oleh admin"})
+			return
+		}
 
 		newAccessToken, newRefreshToken, err := GenerateTokens(userID)
 		if err != nil {
@@ -354,6 +374,12 @@ func main() {
 		}
 
 		DB.Delete(&storedOTP)
+
+		// Minggu 6 Hari 4: user yang diblokir admin tidak bisa login via OTP.
+		if user.Banned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Akun ini sedang diblokir oleh admin"})
+			return
+		}
 
 		accessToken, refreshToken, err := GenerateTokens(user.ID)
 		if err != nil {
@@ -443,6 +469,13 @@ func main() {
 	r.POST("/api/posts/:id/bookmark", RequireAuth, bookmarkHandler.TogglePostBookmark)
 	r.GET("/api/posts/:id/bookmark", OptionalAuth, bookmarkHandler.GetPostBookmarkStatus)
 	r.GET("/api/bookmarks/posts", RequireAuth, bookmarkHandler.ListPostBookmarks)
+
+	// --- RUTE ADMIN (Minggu 6 Hari 4) — hanya Admin (guard role dari DB) ---
+	adminGuard := AdminGuard()
+	r.GET("/api/admin/users", RequireAuth, adminGuard, adminHandler.ListUsers)
+	r.POST("/api/admin/users/:id/ban", RequireAuth, adminGuard, adminHandler.SetBanned(true))
+	r.POST("/api/admin/users/:id/unban", RequireAuth, adminGuard, adminHandler.SetBanned(false))
+	r.POST("/api/admin/users/:id/role", RequireAuth, adminGuard, adminHandler.SetRole)
 
 	// --- RUTE SEARCH (Minggu 5 Hari 4) ---
 	r.GET("/api/search", searchHandler.Search)

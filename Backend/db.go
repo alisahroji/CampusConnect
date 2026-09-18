@@ -21,6 +21,9 @@ type User struct {
 	Name        string    `gorm:"not null" json:"name"`
 	PictureURL  string    `json:"picture_url"`
 	Role        string    `gorm:"default:'Student'" json:"role"`
+	// Minggu 6 Hari 4: status blokir akun (Admin User Management).
+	// Satu kolom saja; enforcement ada di RequireAuth/OptionalAuth & login.
+	Banned      bool      `gorm:"not null;default:false" json:"banned"`
 	Bio         string    `json:"bio"`
 	Skills      string    `json:"skills"`
 	GithubURL   string    `json:"github_url"`

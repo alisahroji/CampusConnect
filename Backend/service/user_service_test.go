@@ -46,6 +46,32 @@ func (m *MockUserRepository) Update(user *repository.User) error {
 }
 
 // ==============================================================================
+// Minggu 6 Hari 4: method tambahan interface UserRepository untuk Admin.
+
+func (m *MockUserRepository) List(limit int) ([]repository.User, error) {
+	args := m.Called(limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]repository.User), args.Error(1)
+}
+
+func (m *MockUserRepository) UpdateBanned(id string, banned bool) error {
+	args := m.Called(id, banned)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) UpdateRole(id string, role string) error {
+	args := m.Called(id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) CountByRole(role string) (int64, error) {
+	args := m.Called(role)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// ==============================================================================
 
 // 2. SKENARIO TEST: Mengambil Profil Berhasil (Success)
 func TestGetUserProfile_Success(t *testing.T) {
