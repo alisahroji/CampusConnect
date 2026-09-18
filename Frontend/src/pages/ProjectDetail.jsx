@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { isLoggedIn, getCurrentUserID } from '../utils/auth';
+import BookmarkButton from '../components/BookmarkButton';
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -246,6 +247,10 @@ const ProjectDetail = () => {
               <span className="text-base leading-none">{liked ? '♥' : '♡'}</span>
               {likeCount} {likeCount === 1 ? 'Like' : 'Likes'}
             </button>
+
+            {/* Bookmark project (Minggu 6): state di-bootstrap dari backend
+                di dalam BookmarkButton, toggle memakai response server. */}
+            <BookmarkButton type="project" id={id} />
 
             {project?.demo_url && (
               <a

@@ -86,10 +86,12 @@ func (r *postRepository) Update(post *Post) error {
 		}).Error
 }
 
-// hydrateLikeStats mengisi LikeCount dan LikedByMe untuk sekumpulan post.
+// hydratePostLikeStats mengisi LikeCount dan LikedByMe untuk sekumpulan post.
 // Hanya 2 query tambahan per halaman (agregasi count + lookup liked-by-viewer),
 // bukan satu query per post (N+1). viewerID kosong berarti anonymous.
-func (r *postRepository) hydrateLikeStats(posts []Post, viewerID string) error {
+// Dibuat sebagai fungsi paket agar dapat dipakai ulang oleh repository lain
+// (mis. post_bookmarks) tanpa duplikasi logika.
+func hydratePostLikeStats(db *gorm.DB, posts []Post, viewerID string) error {
 	if len(posts) == 0 {
 		return nil
 	}
@@ -107,7 +109,7 @@ func (r *postRepository) hydrateLikeStats(posts []Post, viewerID string) error {
 		Total  int64
 	}
 	var counts []likeCountRow
-	if err := r.db.Model(&PostLike{}).
+	if err := db.Model(&PostLike{}).
 		Select("post_id, COUNT(*) AS total").
 		Where("post_id IN ?", ids).
 		Group("post_id").
@@ -123,7 +125,7 @@ func (r *postRepository) hydrateLikeStats(posts []Post, viewerID string) error {
 	// 2. Post yang sudah di-like oleh viewer saat ini
 	if viewerID != "" {
 		var likedIDs []string
-		if err := r.db.Model(&PostLike{}).
+		if err := db.Model(&PostLike{}).
 			Where("user_id = ? AND post_id IN ?", viewerID, ids).
 			Pluck("post_id", &likedIDs).Error; err != nil {
 			return err
@@ -136,6 +138,11 @@ func (r *postRepository) hydrateLikeStats(posts []Post, viewerID string) error {
 	}
 
 	return nil
+}
+
+// hydrateLikeStats (method) mendelegasikan ke fungsi paket hydratePostLikeStats.
+func (r *postRepository) hydrateLikeStats(posts []Post, viewerID string) error {
+	return hydratePostLikeStats(r.db, posts, viewerID)
 }
 
 // paginatePosts menjalankan query keyset pagination: ambil limit+1 baris

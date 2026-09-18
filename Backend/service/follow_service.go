@@ -10,16 +10,22 @@ type FollowService interface {
 	// GetUserWithFollowStatus mengembalikan data user publik beserta status
 	// apakah viewer (viewerID, boleh kosong) mengikutinya.
 	GetUserWithFollowStatus(userID, viewerID string) (*repository.User, bool, error)
+	// SetNotifier opsional (Minggu 6): membuat notification ke user yang di-follow.
+	SetNotifier(n Notifier)
 }
 
 type followService struct {
 	followRepo repository.FollowRepository
 	userRepo   repository.UserRepository
+	notifier   Notifier // opsional (Minggu 6)
 }
 
 func NewFollowService(followRepo repository.FollowRepository, userRepo repository.UserRepository) FollowService {
 	return &followService{followRepo: followRepo, userRepo: userRepo}
 }
+
+// SetNotifier memasang Notifier (Minggu 6) tanpa mengubah constructor existing.
+func (s *followService) SetNotifier(n Notifier) { s.notifier = n }
 
 // GetUserWithFollowStatus mengembalikan data user publik + status apakah
 // viewer sudah meng-follow user tersebut. Dipakai halaman profil publik agar
@@ -53,12 +59,13 @@ func (s *followService) ToggleFollow(followerID, followingID string) (bool, erro
 	}
 
 	// 2. Pastikan user target benar-benar ada (404 jika tidak)
-	if _, err := s.userRepo.FindByID(followingID); err != nil {
+	targetUser, err := s.userRepo.FindByID(followingID)
+	if err != nil {
 		return false, err // Sudah berupa repository.ErrNotFound
 	}
 
 	// 3. Cek apakah sudah follow
-	_, err := s.followRepo.FindByFollowerAndFollowing(followerID, followingID)
+	_, err = s.followRepo.FindByFollowerAndFollowing(followerID, followingID)
 
 	if err == nil {
 		// Sudah follow → unfollow
@@ -77,6 +84,11 @@ func (s *followService) ToggleFollow(followerID, followingID string) (bool, erro
 		FollowingID: followingID,
 	}); createErr != nil {
 		return false, createErr
+	}
+	// Minggu 6: beri tahu user yang baru di-follow (targetUser != follower
+	// karena self-follow sudah ditolak di awal)
+	if s.notifier != nil {
+		s.notifier.Notify(targetUser.ID, followerID, repository.NotifTypeFollow, "")
 	}
 	return true, nil
 }

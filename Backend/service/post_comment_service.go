@@ -11,22 +11,29 @@ type PostCommentService interface {
 	AddPostComment(postID, userID, content string) (*repository.PostComment, error)
 	GetPostComments(postID string) ([]repository.PostComment, error)
 	DeletePostComment(commentID, userID string) error
+	// SetNotifier opsional (Minggu 6): membuat notification ke penulis post.
+	SetNotifier(n Notifier)
 }
 
 type postCommentService struct {
 	postCommentRepo repository.PostCommentRepository
 	postRepo        repository.PostRepository
+	notifier        Notifier // opsional (Minggu 6)
 }
 
 func NewPostCommentService(postCommentRepo repository.PostCommentRepository, postRepo repository.PostRepository) PostCommentService {
 	return &postCommentService{postCommentRepo: postCommentRepo, postRepo: postRepo}
 }
 
+// SetNotifier memasang Notifier (Minggu 6) tanpa mengubah constructor existing.
+func (s *postCommentService) SetNotifier(n Notifier) { s.notifier = n }
+
 const maxPostCommentLength = 1000
 
 func (s *postCommentService) AddPostComment(postID, userID, content string) (*repository.PostComment, error) {
 	// 1. Pastikan post-nya ada
-	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
+	post, err := s.postRepo.FindByID(postID, "")
+	if err != nil {
 		return nil, err // Sudah berupa repository.ErrNotFound
 	}
 
@@ -47,6 +54,10 @@ func (s *postCommentService) AddPostComment(postID, userID, content string) (*re
 	}
 	if err := s.postCommentRepo.Create(comment); err != nil {
 		return nil, err
+	}
+	// Minggu 6: beri tahu penulis post (skip bila penulis komentar == penulis post)
+	if s.notifier != nil {
+		s.notifier.Notify(post.UserID, userID, repository.NotifTypeCommentPost, postID)
 	}
 	return comment, nil
 }

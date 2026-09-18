@@ -14,6 +14,8 @@ import AppNavbar from './components/layout/AppNavbar';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
+import Bookmarks from './pages/Bookmarks';
+import Notifications from './pages/Notifications';
 
 function App() {
   return (
@@ -33,6 +35,10 @@ function App() {
         {/* Minggu 5 Hari 6: Follow UI + Search UI */}
         <Route path="/users/:id" element={<UserProfile />} />
         <Route path="/search" element={<Search />} />
+
+        {/* Minggu 6 Day 3: Bookmark UI + Notification */}
+        <Route path="/bookmarks" element={<Bookmarks />} />
+        <Route path="/notifications" element={<Notifications />} />
         
         {/* Rute Profile ditambahkan di sini, sejajar dengan rute utama */}
         <Route path="/profile" element={<Profile />} />

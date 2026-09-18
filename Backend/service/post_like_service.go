@@ -11,27 +11,34 @@ type PostLikeService interface {
 	// GetPostLikeInfo mengembalikan jumlah like + status liked user tertentu.
 	// userID kosong berarti anonymous (liked = false).
 	GetPostLikeInfo(postID, userID string) (likeCount int64, liked bool, err error)
+	// SetNotifier opsional (Minggu 6): membuat notification ke penulis post.
+	SetNotifier(n Notifier)
 }
 
 type postLikeService struct {
 	postLikeRepo repository.PostLikeRepository
 	postRepo     repository.PostRepository
+	notifier     Notifier // opsional (Minggu 6)
 }
 
 func NewPostLikeService(postLikeRepo repository.PostLikeRepository, postRepo repository.PostRepository) PostLikeService {
 	return &postLikeService{postLikeRepo: postLikeRepo, postRepo: postRepo}
 }
 
+// SetNotifier memasang Notifier (Minggu 6) tanpa mengubah constructor existing.
+func (s *postLikeService) SetNotifier(n Notifier) { s.notifier = n }
+
 // TogglePostLike membalik status like pada sebuah post: jika sudah like maka
 // di-unlike, jika belum maka di-like. Mirip dengan toggle like pada project.
 func (s *postLikeService) TogglePostLike(postID, userID string) (bool, int64, error) {
 	// 1. Pastikan post-nya benar-benar ada
-	if _, err := s.postRepo.FindByID(postID, ""); err != nil {
+	post, err := s.postRepo.FindByID(postID, "")
+	if err != nil {
 		return false, 0, err // Sudah berupa repository.ErrNotFound
 	}
 
 	// 2. Cek apakah user sudah like post ini
-	_, err := s.postLikeRepo.FindByUserAndPost(postID, userID)
+	_, err = s.postLikeRepo.FindByUserAndPost(postID, userID)
 	liked := false
 
 	if err == nil {
@@ -46,6 +53,10 @@ func (s *postLikeService) TogglePostLike(postID, userID string) (bool, int64, er
 			return false, 0, createErr
 		}
 		liked = true
+		// Minggu 6: beri tahu penulis post (skip bila user == penulis)
+		if s.notifier != nil {
+			s.notifier.Notify(post.UserID, userID, repository.NotifTypeLikePost, postID)
+		}
 	} else {
 		return false, 0, err
 	}

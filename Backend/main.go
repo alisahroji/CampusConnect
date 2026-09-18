@@ -128,9 +128,33 @@ func main() {
 	feedHandler := handler.NewFeedHandler(feedService)
 
 	// Inisiasi Layer Search - Minggu 5 Hari 4
-	searchRepo := repository.NewSearchRepository(DB)
-	searchService := service.NewSearchService(searchRepo)
-	searchHandler := handler.NewSearchHandler(searchService)
+
+	searchRepo := repository.NewSearchRepository(DB)
+
+	searchService := service.NewSearchService(searchRepo)
+
+	searchHandler := handler.NewSearchHandler(searchService)
+
+	// Inisiasi Layer Bookmark (Minggu 6 Hari 1)
+	projectBookmarkRepo := repository.NewProjectBookmarkRepository(DB)
+	postBookmarkRepo := repository.NewPostBookmarkRepository(DB)
+	bookmarkService := service.NewBookmarkService(projectBookmarkRepo, postBookmarkRepo, projectRepo, postRepo)
+	bookmarkHandler := handler.NewBookmarkHandler(bookmarkService)
+
+	// Inisiasi Layer Notification (Minggu 6 Hari 2) — storage-only, belum realtime.
+	// Service like/comment/follow dipasang Notifier agar kejadian nyata
+	// (like project/post, comment project/post, follow) membuat notification
+	// untuk pemilik konten / user yang di-follow.
+	notificationRepo := repository.NewNotificationRepository(DB)
+	notificationService := service.NewNotificationService(notificationRepo)
+
+	likeService.SetNotifier(notificationService)
+	postLikeService.SetNotifier(notificationService)
+	commentService.SetNotifier(notificationService)
+	postCommentService.SetNotifier(notificationService)
+	followService.SetNotifier(notificationService)
+
+	notificationHandler := handler.NewNotificationHandler(notificationService)
 
 
 
@@ -404,7 +428,23 @@ func main() {
 	// Profil publik user untuk halaman Follow UI (publik, auth opsional)
 	r.GET("/api/users/:id", OptionalAuth, userHandler.GetPublicProfile)
 
-	// --- RUTE SEARCH (Minggu 5 Hari 4) ---
+	// --- RUTE NOTIFICATION (Minggu 6 Hari 2) ---
+	r.GET("/api/notifications", RequireAuth, notificationHandler.List)
+	r.GET("/api/notifications/unread-count", RequireAuth, notificationHandler.UnreadCount)
+	r.POST("/api/notifications/read-all", RequireAuth, notificationHandler.MarkAllRead)
+	r.POST("/api/notifications/:id/read", RequireAuth, notificationHandler.MarkRead)
+
+	// --- RUTE BOOKMARK (Minggu 6 Hari 1) ---
+	// Toggle & status per resource; list bookmark milik user yang login.
+	r.POST("/api/projects/:id/bookmark", RequireAuth, bookmarkHandler.ToggleProjectBookmark)
+	r.GET("/api/projects/:id/bookmark", OptionalAuth, bookmarkHandler.GetProjectBookmarkStatus)
+	r.GET("/api/bookmarks/projects", RequireAuth, bookmarkHandler.ListProjectBookmarks)
+
+	r.POST("/api/posts/:id/bookmark", RequireAuth, bookmarkHandler.TogglePostBookmark)
+	r.GET("/api/posts/:id/bookmark", OptionalAuth, bookmarkHandler.GetPostBookmarkStatus)
+	r.GET("/api/bookmarks/posts", RequireAuth, bookmarkHandler.ListPostBookmarks)
+
+	// --- RUTE SEARCH (Minggu 5 Hari 4) ---
 	r.GET("/api/search", searchHandler.Search)
 
 

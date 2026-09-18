@@ -10,16 +10,22 @@ type CommentService interface {
 	AddComment(projectID, userID, content string) (*repository.Comment, error)
 	GetComments(projectID string) ([]repository.Comment, error)
 	DeleteComment(commentID, userID string) error
+	// SetNotifier opsional (Minggu 6): membuat notification ke pemilik project.
+	SetNotifier(n Notifier)
 }
 
 type commentService struct {
 	commentRepo repository.CommentRepository
 	projectRepo repository.ProjectRepository
+	notifier    Notifier // opsional (Minggu 6)
 }
 
 func NewCommentService(commentRepo repository.CommentRepository, projectRepo repository.ProjectRepository) CommentService {
 	return &commentService{commentRepo: commentRepo, projectRepo: projectRepo}
 }
+
+// SetNotifier memasang Notifier (Minggu 6) tanpa mengubah constructor existing.
+func (s *commentService) SetNotifier(n Notifier) { s.notifier = n }
 
 func (s *commentService) AddComment(projectID, userID, content string) (*repository.Comment, error) {
 	// 1. Validasi konten komentar
@@ -29,7 +35,8 @@ func (s *commentService) AddComment(projectID, userID, content string) (*reposit
 	}
 
 	// 2. Pastikan project-nya benar-benar ada
-	if _, err := s.projectRepo.FindByID(projectID); err != nil {
+	project, err := s.projectRepo.FindByID(projectID)
+	if err != nil {
 		return nil, err // Sudah berupa repository.ErrNotFound
 	}
 
@@ -41,6 +48,10 @@ func (s *commentService) AddComment(projectID, userID, content string) (*reposit
 	}
 	if err := s.commentRepo.Create(comment); err != nil {
 		return nil, err
+	}
+	// Minggu 6: beri tahu pemilik project (skip bila penulis == pemilik)
+	if s.notifier != nil {
+		s.notifier.Notify(project.UserID, userID, repository.NotifTypeCommentProject, projectID)
 	}
 	return comment, nil
 }

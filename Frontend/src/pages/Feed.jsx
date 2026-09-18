@@ -17,6 +17,8 @@ const Feed = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  // ID post yang sudah di-bookmark user (bootstrap untuk PostCard, Minggu 6)
+  const [bookmarkedPostIDs, setBookmarkedPostIDs] = useState(() => new Set());
 
   // Composer
   const [newPost, setNewPost] = useState('');
@@ -24,6 +26,36 @@ const Feed = () => {
   const [composerError, setComposerError] = useState('');
 
   const isLoggedIn = () => Boolean(localStorage.getItem('access_token'));
+
+  // ---- Bootstrap bookmark post (Minggu 6): 1 request untuk seluruh feed,
+  //      bukan 1 request per kartu. Anonymous: tanpa request. ----
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapBookmarks = async () => {
+      if (!isLoggedIn()) {
+        setBookmarkedPostIDs(new Set());
+        return;
+      }
+      try {
+        const res = await api.get('/bookmarks/posts');
+        if (!cancelled) {
+          setBookmarkedPostIDs(
+            new Set((res.data.data || []).map((post) => post.id))
+          );
+        }
+      } catch {
+        // Fallback aman: kartu akan bootstrap statusnya sendiri via
+        // BookmarkButton (1 request per kartu) bila daftar gagal dimuat.
+        if (!cancelled) setBookmarkedPostIDs(new Set());
+      }
+    };
+
+    bootstrapBookmarks();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
 
   // ---- Data fetching (cursor pagination) ----
   const fetchPosts = useCallback(
@@ -278,7 +310,14 @@ const Feed = () => {
         ) : (
           <div className="space-y-4">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} onChanged={refresh} />
+              <PostCard
+                key={post.id}
+                post={post}
+                onChanged={refresh}
+                initialBookmarked={
+                  bookmarkedPostIDs.has(post.id) ? true : null
+                }
+              />
             ))}
           </div>
         )}

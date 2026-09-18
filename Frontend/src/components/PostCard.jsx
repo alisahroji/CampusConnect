@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { getCurrentUserID } from '../utils/auth';
+import BookmarkButton from './BookmarkButton';
 
 // Format waktu relatif sederhana (mis. "5 jam lalu")
 const formatRelativeTime = (isoDate) => {
@@ -27,7 +28,7 @@ const wasEdited = (createdAt, updatedAt) => {
   return new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 1000;
 };
 
-const PostCard = ({ post, onChanged }) => {
+const PostCard = ({ post, onChanged, initialBookmarked = null }) => {
   const navigate = useNavigate();
 
   // Bootstrap status like LANGSUNG dari server: setiap response post (list
@@ -309,6 +310,10 @@ const PostCard = ({ post, onChanged }) => {
             <span className="text-xs text-[#94A3B8]">({comments.length})</span>
           )}
         </button>
+
+        {/* Bookmark post (Minggu 6): state dari server (bootstrap set dari
+            Feed / fetch status), toggle memakai response server. */}
+        <BookmarkButton type="post" id={post.id} initialBookmarked={initialBookmarked} />
       </div>
 
       {/* Section komentar (inline expand) */}
