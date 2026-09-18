@@ -28,3 +28,10 @@ export const getCurrentUserID = () => {
     return '';
   }
 };
+
+// Menghapus sesi login (dipakai tombol Logout di AppNavbar): token akses dan
+// refresh dihapus dari localStorage. Destinasi redirect ditentukan pemanggil.
+export const logout = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+};

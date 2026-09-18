@@ -1,6 +1,15 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Register = () => {
+  const navigate = useNavigate();
+
+  // Belum ada endpoint registrasi terpisah di backend — akun dibuat otomatis
+  // saat login OTP pertama. Arahkan ke alur masuk yang benar-benar tersedia,
+  // jangan membuat tombol palsu yang tidak melakukan apa-apa.
+  const handleGoToLogin = (e) => {
+    e.preventDefault();
+    navigate('/login');
+  };
   return (
     <>
       <style>{`
@@ -51,7 +60,7 @@ const Register = () => {
               <h1 className="text-2xl font-display font-bold text-[#1E293B]">Registrasi</h1>
             </div>
 
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleGoToLogin}>
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-xs font-bold text-[#1E293B] uppercase tracking-wider">
                   Email Institusi / Pribadi
@@ -65,11 +74,13 @@ const Register = () => {
                 />
               </div>
 
+              {/* Alur masuk memakai OTP/Google di halaman Login (akun dibuat
+                  otomatis pada OTP pertama — belum ada endpoint register terpisah) */}
               <button 
-                type="button"
+                type="submit"
                 className="w-full bg-[#112320] hover:bg-[#1E293B] text-white py-4 text-sm font-bold tracking-wider uppercase transition-colors rounded-none"
               >
-                Mulai Registrasi
+                Mulai dengan Email
               </button>
             </form>
 
@@ -81,7 +92,8 @@ const Register = () => {
 
             <button 
               type="button"
-              className="w-full flex items-center justify-center gap-3 bg-white border border-[#E2E8F0] hover:border-[#112320] text-[#1E293B] font-bold py-3 px-4 rounded-full transition-all duration-300"
+              onClick={() => { window.location.href = 'http://localhost:8080/api/auth/google/login'; }}
+              className="w-full flex items-center justify-center gap-3 bg-white border border-[#E2E8F0] hover:border-[#112320] text-[#1E293B] font-bold py-3 px-4 rounded-full transition-all duration-300 cursor-pointer"
             >
               {/* Google SVG */}
               <svg className="w-5 h-5" viewBox="0 0 24 24">

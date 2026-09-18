@@ -16,19 +16,20 @@ export default function Landing() {
 
         {/* Center Links (Desktop only) */}
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-          <Link to="#" className="text-gray-900 hover:text-primary transition-colors">Home</Link>
-          <Link to="#" className="hover:text-primary transition-colors">Courses</Link>
-          <Link to="#" className="hover:text-primary transition-colors">Resources</Link>
-          <Link to="#" className="hover:text-primary transition-colors">Community</Link>
-          <Link to="#" className="hover:text-primary transition-colors">About Us</Link>
-          <Link to="#" className="hover:text-primary transition-colors">Contact</Link>
+          <Link to="/" className="text-gray-900 hover:text-primary transition-colors">Home</Link>
+          <Link to="/projects" className="hover:text-primary transition-colors">Projects</Link>
+          <Link to="/search" className="hover:text-primary transition-colors">Search</Link>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-4">
-          <button className="text-gray-500 hover:text-primary transition-colors p-2 rounded-full hover:bg-gray-100">
+          <Link 
+            to="/login" 
+            aria-label="Masuk"
+            className="text-gray-500 hover:text-primary transition-colors p-2 rounded-full hover:bg-gray-100"
+          >
             <User className="w-5 h-5" />
-          </button>
+          </Link>
           <Link 
             to="/login" 
             className="bg-primary hover:bg-blue-700 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-colors"
@@ -66,10 +67,10 @@ export default function Landing() {
               Get Started
             </Link>
             <Link 
-              to="#" 
+              to="/projects" 
               className="border border-white hover:bg-white hover:text-gray-900 text-white px-6 py-3 rounded-full font-medium transition-all"
             >
-              Learn More
+              Lihat Project Mahasiswa
             </Link>
           </div>
         </div>

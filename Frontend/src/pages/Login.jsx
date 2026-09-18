@@ -43,7 +43,7 @@ const Login = () => {
       localStorage.setItem('access_token', response.data.access_token);
       
       // Jika sukses, arahkan user ke halaman Dashboard/Profile
-      navigate('/'); 
+      navigate('/feed'); 
     } catch (error) {
       setErrorMsg(error.response?.data?.error || 'Kode OTP salah atau kedaluwarsa.');
     } finally {

@@ -4,12 +4,14 @@ import { Home, BookOpen, MessageCircle, CreditCard, User, Bell, Search } from 'l
 export default function DashboardLayout() {
   const location = useLocation();
 
+  // Item yang belum punya halaman (scope fase berikutnya) dinonaktifkan secara
+  // jujur: tetap terlihat, tapi non-klik dengan label "Segera" — bukan dead-link.
   const navItems = [
     { name: 'Home', path: '/dashboard', icon: Home },
-    { name: 'My Courses', path: '/dashboard/courses', icon: BookOpen },
-    { name: 'Inbox', path: '/dashboard/inbox', icon: MessageCircle },
-    { name: 'Transaction', path: '/dashboard/transaction', icon: CreditCard },
-    { name: 'Profile', path: '/dashboard/profile', icon: User },
+    { name: 'My Courses', path: null, icon: BookOpen },
+    { name: 'Inbox', path: null, icon: MessageCircle },
+    { name: 'Transaction', path: null, icon: CreditCard },
+    { name: 'Profile', path: '/profile', icon: User },
   ];
 
   return (
@@ -23,16 +25,29 @@ export default function DashboardLayout() {
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = item.path !== null && location.pathname === item.path;
             const Icon = item.icon;
+            const baseClass = `flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
+              isActive ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 hover:text-primary'
+            }`;
+
+            if (item.path === null) {
+              return (
+                <span
+                  key={item.name}
+                  aria-disabled="true"
+                  title="Segera hadir"
+                  className={`${baseClass} opacity-50 cursor-not-allowed select-none`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-medium text-sm">{item.name}</span>
+                  <span className="ml-auto text-[10px] uppercase tracking-wide text-gray-400">Segera</span>
+                </span>
+              );
+            }
+
             return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
-                  isActive ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50 hover:text-primary'
-                }`}
-              >
+              <Link key={item.name} to={item.path} className={baseClass}>
                 <Icon className="w-5 h-5" />
                 <span className="font-medium text-sm">{item.name}</span>
               </Link>
@@ -77,12 +92,29 @@ export default function DashboardLayout() {
       {/* Bottom Navigation (Mobile Only) */}
       <nav className="md:hidden fixed bottom-0 w-full bg-white border-t border-gray-100 flex items-center justify-around py-3 z-50">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = item.path !== null && location.pathname === item.path;
           const Icon = item.icon;
-          return (
-            <Link key={item.name} to={item.path} className={`flex flex-col items-center gap-1 ${isActive ? 'text-primary' : 'text-gray-400'}`}>
+          const itemClass = `flex flex-col items-center gap-1 ${
+            isActive ? 'text-primary' : 'text-gray-400'
+          } ${item.path === null ? 'opacity-40 cursor-not-allowed' : ''}`;
+          const content = (
+            <>
               <Icon className="w-6 h-6" />
               <span className="text-[10px] font-medium">{item.name}</span>
+            </>
+          );
+
+          if (item.path === null) {
+            return (
+              <span key={item.name} aria-disabled="true" className={itemClass}>
+                {content}
+              </span>
+            );
+          }
+
+          return (
+            <Link key={item.name} to={item.path} className={itemClass}>
+              {content}
             </Link>
           );
         })}

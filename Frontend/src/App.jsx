@@ -10,6 +10,7 @@ import Feed from './pages/Feed';
 import UserProfile from './pages/UserProfile';
 import Search from './pages/Search';
 import DashboardLayout from './components/layout/DashboardLayout';
+import AppNavbar from './components/layout/AppNavbar';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
@@ -17,6 +18,8 @@ import EditProfile from './pages/EditProfile';
 function App() {
   return (
     <BrowserRouter>
+      {/* Navbar global application routes (hide sendiri di Landing/Login/Register/Callback/Dashboard) */}
+      <AppNavbar />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />

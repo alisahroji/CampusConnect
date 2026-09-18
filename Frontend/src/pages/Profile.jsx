@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 const Profile = () => {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,6 +24,12 @@ const Profile = () => {
 
         setProfile(actualProfileData);
       } catch (err) {
+        // Halaman ini butuh sesi: token kosong/kedaluwarsa → lempar ke Login,
+        // jangan tampilkan error merah (konsisten dengan gating halaman lain).
+        if (err.response?.status === 401) {
+          navigate('/login', { replace: true });
+          return;
+        }
         console.error("!!! ERROR FATAL TERDETEKSI !!!", err);
         const errorMessage = err.response?.data?.error || err.message || 'Error tidak diketahui.';
         setError(`Gagal: ${errorMessage}`);
@@ -32,7 +39,7 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, []);
+  }, [navigate]);
   
   if (loading) {
     return (

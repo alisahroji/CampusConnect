@@ -20,8 +20,8 @@ const AuthCallback = () => {
       if (refreshToken) {
         localStorage.setItem('refresh_token', refreshToken);
       }
-      // Token berhasil disimpan → arahkan ke halaman Profile
-      navigate('/profile', { replace: true });
+      // Login sukses → Home utama aplikasi (Feed), bukan profil
+      navigate('/feed', { replace: true });
     } else {
       // Tidak ada token di URL → kembali ke halaman login
       navigate('/login', { replace: true });
