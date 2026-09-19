@@ -16,6 +16,7 @@ import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
 import Bookmarks from './pages/Bookmarks';
 import Notifications from './pages/Notifications';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   return (
@@ -39,6 +40,10 @@ function App() {
         {/* Minggu 6 Day 3: Bookmark UI + Notification */}
         <Route path="/bookmarks" element={<Bookmarks />} />
         <Route path="/notifications" element={<Notifications />} />
+
+        {/* Minggu 6 Day 5: Admin Dashboard (guard role via /api/profile;
+            authority tetap AdminGuard backend) */}
+        <Route path="/admin" element={<AdminDashboard />} />
         
         {/* Rute Profile ditambahkan di sini, sejajar dengan rute utama */}
         <Route path="/profile" element={<Profile />} />
