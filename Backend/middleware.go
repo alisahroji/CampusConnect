@@ -185,3 +185,39 @@ func AdminGuard() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// LecturerGuard (Minggu 7 Day 2) melindungi endpoint upload/kelola material.
+// Role sumber kebenaran = DB (currentUser dimuat oleh RequireAuth per request),
+// mengikuti pola AdminGuard:
+//  - anonymous / token rusak  -> 401 (oleh RequireAuth, guard tak tercapai)
+//  - authenticated non-Lecturer (Student/Admin) -> 403
+//  - authenticated Lecturer   -> lanjut ke handler
+// Banned juga dicek ulang di sini (defense in depth, pola AdminGuard).
+func LecturerGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser, exists := c.Get("currentUser")
+		if !exists {
+			// Pertahanan: tidak boleh terjadi setelah RequireAuth.
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Akses ditolak: Belum terautentikasi"})
+			c.Abort()
+			return
+		}
+
+		user, ok := currentUser.(User)
+		if !ok || user.Role != "Lecturer" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Endpoint ini khusus dosen (Lecturer)"})
+			c.Abort()
+			return
+		}
+
+		if user.Banned {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Akun ini sedang diblokir oleh admin"})
+			c.Abort()
+			return
+		}
+
+		// Handler membaca role dari sini (defense in depth kedua), bukan dari payload client.
+		c.Set("userRole", user.Role)
+		c.Next()
+	}
+}

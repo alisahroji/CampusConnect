@@ -17,6 +17,7 @@ import EditProfile from './pages/EditProfile';
 import Bookmarks from './pages/Bookmarks';
 import Notifications from './pages/Notifications';
 import AdminDashboard from './pages/AdminDashboard';
+import Materials from './pages/Materials';
 
 function App() {
   return (
@@ -44,6 +45,10 @@ function App() {
         {/* Minggu 6 Day 5: Admin Dashboard (guard role via /api/profile;
             authority tetap AdminGuard backend) */}
         <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Minggu 7 Day 3: Materials (list authenticated; form upload
+            Lecturer-only via /api/profile — authority tetap LecturerGuard) */}
+        <Route path="/materials" element={<Materials />} />
         
         {/* Rute Profile ditambahkan di sini, sejajar dengan rute utama */}
         <Route path="/profile" element={<Profile />} />

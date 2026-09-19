@@ -161,6 +161,12 @@ func main() {
 	adminService := service.NewAdminService(userRepo)
 	adminHandler := handler.NewAdminHandler(adminService)
 
+	// Inisiasi Layer Material (Minggu 7 Day 2) — CRUD materi + upload Cloudinary raw.
+	// Authorization: RequireAuth + LecturerGuard untuk tulis; read semua role authenticated.
+	materialRepo := repository.NewMaterialRepository(DB)
+	materialService := service.NewMaterialService(materialRepo, handler.NewCloudinaryUploader())
+	materialHandler := handler.NewMaterialHandler(materialService)
+
 
 
 	r.Use(cors.New(cors.Config{
@@ -409,6 +415,15 @@ func main() {
 	r.POST("/api/projects", RequireAuth, projectHandler.Create)
 	r.PUT("/api/projects/:id", RequireAuth, projectHandler.Update)
 	r.DELETE("/api/projects/:id", RequireAuth, projectHandler.Delete)
+
+	// --- RUTE MATERIAL (Minggu 7 Day 2) ---
+	// Upload/kelola materi khusus Lecturer (guard di middleware, role dari DB).
+	// Read: semua role yang sudah login (policy Day 2 — diarahkan ke guard FE Day 3).
+	r.POST("/api/materials", RequireAuth, LecturerGuard(), materialHandler.Create)
+	r.GET("/api/materials", RequireAuth, materialHandler.GetAll)
+	r.GET("/api/materials/:id", RequireAuth, materialHandler.GetByID)
+	r.PUT("/api/materials/:id", RequireAuth, materialHandler.Update)
+	r.DELETE("/api/materials/:id", RequireAuth, materialHandler.Delete)
 
 	// --- RUTE INTERAKSI: LIKE & COMMENT ---
 	// Komentar: daftar publik, tambah & hapus terproteksi
